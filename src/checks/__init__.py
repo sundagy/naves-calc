@@ -1,0 +1,2 @@
+"""Preliminary structural checks."""
+

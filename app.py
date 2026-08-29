@@ -1,0 +1,231 @@
+from __future__ import annotations
+
+import json
+from dataclasses import asdict
+
+import pandas as pd
+import streamlit as st
+
+from src.checks.axial import top_utilized
+from src.config import input_from_preset, load_presets, load_sections
+from src.fem.opensees_solver import solve_model
+from src.geometry.canopy import CanopyPlan, roof_plane_from_input
+from src.geometry.columns import ORIGINAL_SUPPORTS_BY_TRUSS
+from src.geometry.truss import generate_model
+from src.loads.self_weight import mass_breakdown
+from src.loads.snow_sp20 import kaluga_source
+from src.models import BaseFixity, CanopyInput, SupportMode, WebType
+from src.optimization.cost import cost_breakdown
+from src.optimization.variants import variant_summary
+from src.reports.excel import results_xlsx
+from src.reports.html import html_report
+from src.visualization.model3d import model_figure
+
+
+st.set_page_config(page_title="naves-calc", layout="wide")
+
+
+def main() -> None:
+    st.title("Параметрический МКЭ-стенд автомобильного навеса")
+    st.caption(
+        "Предварительная расчётная проверка. Результаты МКЭ и автоматических проверок "
+        "не заменяют рабочий проект и проверку инженером-конструктором."
+    )
+    presets = load_presets()
+    sections = load_sections()
+    if "variants" not in st.session_state:
+        st.session_state["variants"] = []
+
+    data = sidebar_inputs(presets, sections)
+    plan = CanopyPlan(width=data.width, left_depth=data.left_depth, right_depth=data.right_depth)
+    roof = roof_plane_from_input(data)
+
+    st.sidebar.info(f"{kaluga_source()}. Значение Sg редактируемое.")
+    st.sidebar.metric("Площадь трапеции", f"{plan.area:.1f} м²")
+    st.sidebar.metric("Высота заднего правого угла", f"{roof.rear_right_height:.2f} м")
+    st.sidebar.metric("Макс. угол кровли", f"{roof.max_angle_deg:.2f}°")
+
+    try:
+        model = generate_model(data)
+    except Exception as exc:
+        st.error(str(exc))
+        return
+
+    mode = st.selectbox(
+        "Режим визуализации",
+        ["GEOMETRY", "DEFORMED", "AXIAL_FORCE", "DISPLACEMENT", "UTILIZATION", "REACTIONS", "SNOW_LOAD"],
+        index=0,
+    )
+    scale = st.select_slider("Масштаб деформаций", options=[1, 5, 10, 20, 50, 100], value=20)
+    calculate = st.button("Рассчитать", type="primary")
+
+    result = None
+    if calculate:
+        with st.spinner("OpenSeesPy: линейный статический расчёт..."):
+            result = solve_model(data, model)
+        st.session_state["last_result"] = result
+        st.session_state["last_input"] = data
+        st.session_state["last_model"] = model
+    else:
+        result = st.session_state.get("last_result")
+        data = st.session_state.get("last_input", data)
+        model = st.session_state.get("last_model", model)
+
+    fig = model_figure(data, model, result, mode=mode, deformation_scale=scale)
+    apply_camera(fig, st.radio("Камера", ["Изометрия", "План", "Спереди", "Сзади", "Слева", "Справа"], horizontal=True))
+    st.plotly_chart(fig, use_container_width=True)
+
+    geometry_summary(model, data)
+    if result is not None:
+        show_results(data, model, result)
+
+    comparison_panel()
+
+
+def sidebar_inputs(presets: dict[str, dict], sections: list[str]) -> CanopyInput:
+    st.sidebar.header("Параметры")
+    preset_name = st.sidebar.selectbox("Preset", list(presets), index=0)
+    data = input_from_preset(preset_name)
+
+    lower_count = st.sidebar.slider("Нижние фермы", 4, 8, int(data.lower_count))
+    upper_count = st.sidebar.slider("Верхние фермы", 6, 12, int(data.upper_count))
+    lower_height = st.sidebar.number_input("Высота нижних ферм, мм", 150.0, 1200.0, float(data.lower_height_mm), 50.0)
+    upper_height = st.sidebar.number_input("Высота верхних ферм, мм", 150.0, 1200.0, float(data.upper_height_mm), 50.0)
+    data.lower_target_panel_length = st.sidebar.number_input("Целевая длина панели нижних ферм, м", 0.4, 4.0, data.lower_target_panel_length, 0.1)
+    data.target_panel_length = st.sidebar.number_input("Целевая длина панели верхних ферм, м", 0.4, 4.0, data.target_panel_length, 0.1)
+
+    data.lower_count = lower_count
+    data.upper_count = upper_count
+    data.lower_height_mm = lower_height
+    data.upper_height_mm = upper_height
+    support_options = [SupportMode.EXISTING_10.value, SupportMode.LOWER_TRUSS_ENDS.value]
+    default_support = data.support_mode.value if data.support_mode.value in support_options else SupportMode.LOWER_TRUSS_ENDS.value
+    data.support_mode = SupportMode(
+        st.sidebar.selectbox(
+            "Опоры",
+            support_options,
+            support_options.index(default_support),
+            help="EXISTING_10 — исходные 10 стоек. LOWER_TRUSS_ENDS — по две стойки на каждую нижнюю ферму.",
+        )
+    )
+    if preset_name != "original" or lower_count != 4:
+        data.lower_positions_x = None
+        if data.support_mode == SupportMode.EXISTING_10:
+            st.sidebar.warning("EXISTING_10 корректен только для исходных 4 нижних ферм; включён LOWER_TRUSS_ENDS.")
+            data.support_mode = SupportMode.LOWER_TRUSS_ENDS
+
+    data.lower_chord_section = st.sidebar.selectbox("Пояса нижних ферм", sections, sections.index(data.lower_chord_section))
+    data.lower_web_section = st.sidebar.selectbox("Решётка нижних ферм", sections, sections.index(data.lower_web_section))
+    data.upper_chord_section = st.sidebar.selectbox("Пояса верхних ферм", sections, sections.index(data.upper_chord_section))
+    data.upper_web_section = st.sidebar.selectbox("Решётка верхних ферм", sections, sections.index(data.upper_web_section))
+    data.column_section = st.sidebar.selectbox("Стойки", sections, sections.index(data.column_section))
+    web_options = [item.value for item in WebType]
+    data.lower_web_type = WebType(st.sidebar.selectbox("Заполнение нижних ферм", web_options, web_options.index(str(data.lower_web_type))))
+    data.upper_web_type = WebType(st.sidebar.selectbox("Заполнение верхних ферм", web_options, web_options.index(str(data.upper_web_type))))
+
+    st.sidebar.subheader("Высотные отметки")
+    data.front_left_height = st.sidebar.number_input("Передний левый угол, м", 0.0, 10.0, data.front_left_height, 0.1)
+    data.front_right_height = st.sidebar.number_input("Передний правый угол, м", 0.0, 10.0, data.front_right_height, 0.1)
+    data.rear_left_height = st.sidebar.number_input("Задний левый угол, м", 0.0, 10.0, data.rear_left_height, 0.1)
+    if data.front_left_height == data.front_right_height == data.rear_left_height:
+        st.sidebar.warning("Высотные отметки кровли не заданы. Расчёт коэффициента формы снеговой нагрузки требует фактического уклона.")
+
+    st.sidebar.subheader("Нагрузки")
+    data.roof_dead_load_kpa = st.sidebar.number_input("Постоянная нагрузка, кН/м²", 0.0, 5.0, data.roof_dead_load_kpa, 0.01)
+    data.snow_sg_kpa = st.sidebar.number_input("Sg снег на земле, кН/м²", 0.0, 10.0, data.snow_sg_kpa, 0.01)
+    data.snow_ce = st.sidebar.number_input("ce", 0.0, 2.0, data.snow_ce, 0.05)
+    data.snow_ct = st.sidebar.number_input("ct", 0.0, 2.0, data.snow_ct, 0.05)
+    data.snow_gamma_f = st.sidebar.number_input("gamma_f", 1.0, 2.0, data.snow_gamma_f, 0.05)
+
+    st.sidebar.subheader("Стоимость")
+    data.steel_price_per_kg = st.sidebar.number_input("Сталь, руб/кг", 0.0, 1000.0, data.steel_price_per_kg, 5.0)
+    data.fabrication_per_truss = st.sidebar.number_input("Изготовление фермы, руб", 0.0, 1_000_000.0, data.fabrication_per_truss, 1000.0)
+    data.column_cost = st.sidebar.number_input("Стойка, руб", 0.0, 1_000_000.0, data.column_cost, 1000.0)
+    data.foundation_cost = st.sidebar.number_input("Фундамент, руб", 0.0, 1_000_000.0, data.foundation_cost, 1000.0)
+    data.connection_cost = st.sidebar.number_input("Монтажный узел, руб", 0.0, 100_000.0, data.connection_cost, 100.0)
+    data.base_fixity = BaseFixity(st.sidebar.selectbox("Закрепление оснований", [item.value for item in BaseFixity]))
+    return data
+
+
+def geometry_summary(model, data: CanopyInput) -> None:
+    masses = mass_breakdown(model)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Узлы", len(model.nodes))
+    c2.metric("Элементы", len(model.elements))
+    c3.metric("Стойки", len(model.columns))
+    st.caption(f"Original supports: {ORIGINAL_SUPPORTS_BY_TRUSS}")
+    st.caption(f"Масса до расчёта: нижние {masses['lower']:.1f} кг, верхние {masses['upper']:.1f} кг, стойки {masses['columns']:.1f} кг.")
+
+
+def show_results(data: CanopyInput, model, result) -> None:
+    if not result.ok:
+        st.error(result.message)
+        return
+    cost = cost_breakdown(data, model)
+    max_util = float(result.elements["utilization"].max())
+    max_reaction = float(result.reactions["Rz_kN"].abs().max())
+    cols = st.columns(7)
+    cols[0].metric("Площадь", f"{model.loaded_roof_area:.1f} м²")
+    cols[1].metric("Масса", f"{result.elements['mass_kg'].sum():.0f} кг")
+    cols[2].metric("Max Uz", f"{result.max_uz_mm:.1f} мм")
+    cols[3].metric("Max |N|", f"{result.max_abs_n_kn:.1f} кН")
+    cols[4].metric("Max Rz", f"{max_reaction:.1f} кН")
+    cols[5].metric("Max util", f"{max_util:.2f}")
+    cols[6].metric("Стоимость", f"{cost['total_cost']:,.0f} руб")
+
+    lb = result.load_breakdown
+    st.info(
+        f"Sg={lb.sg_kpa:.2f}, ce={lb.ce:.2f}, ct={lb.ct:.2f}, mu={lb.mu:.3f}, "
+        f"gamma_f={lb.gamma_f:.2f}, S0={lb.s0_kpa:.3f} кН/м², Sd={lb.sd_kpa:.3f} кН/м²."
+    )
+    st.write(
+        f"Полная приложенная вертикальная нагрузка: {(lb.total_roof_load_n + lb.total_self_weight_n) / 1000:.2f} кН. "
+        f"Сумма Rz: {result.total_reaction_z_n / 1000:.2f} кН."
+    )
+
+    if st.button("Сохранить вариант для сравнения"):
+        st.session_state["variants"].append(variant_summary(f"Variant {len(st.session_state['variants']) + 1}", data, model, result))
+
+    tab_names = ["Элементы", "Узлы", "Реакции", "Нагрузки", "Top utilization", "Экспорт"]
+    tabs = st.tabs(tab_names)
+    tabs[0].dataframe(result.elements.sort_values("utilization", ascending=False), use_container_width=True)
+    tabs[1].dataframe(result.nodes, use_container_width=True)
+    tabs[2].dataframe(result.reactions.sort_values("Rz_kN", ascending=False), use_container_width=True)
+    tabs[3].dataframe(result.loads, use_container_width=True)
+    tabs[4].dataframe(top_utilized(result.elements), use_container_width=True)
+    with tabs[5]:
+        export_payload = {
+            "input": asdict(data),
+            "summary": variant_summary("current", data, model, result),
+            "loads": asdict(result.load_breakdown),
+        }
+        st.download_button("Export JSON", json.dumps(export_payload, ensure_ascii=False, indent=2, default=str), "naves-calc.json")
+        st.download_button("Export elements CSV", result.elements.to_csv(index=False), "elements.csv")
+        st.download_button("Export results.xlsx", results_xlsx(result), "results.xlsx")
+        st.download_button("Export HTML report", html_report(data, result), "report.html")
+
+
+def comparison_panel() -> None:
+    st.header("Сравнение схем")
+    variants = st.session_state.get("variants", [])
+    if not variants:
+        st.caption("Сохраните рассчитанный вариант, чтобы сравнить его с другими.")
+        return
+    table = pd.DataFrame([{key: value for key, value in item.items() if key != "input"} for item in variants])
+    st.dataframe(table, use_container_width=True)
+
+
+def apply_camera(fig, camera_name: str) -> None:
+    cameras = {
+        "Изометрия": dict(eye=dict(x=1.6, y=-1.8, z=1.2)),
+        "План": dict(eye=dict(x=0.0, y=0.0, z=2.6)),
+        "Спереди": dict(eye=dict(x=0.0, y=-2.4, z=0.6)),
+        "Сзади": dict(eye=dict(x=0.0, y=2.4, z=0.6)),
+        "Слева": dict(eye=dict(x=-2.4, y=0.0, z=0.6)),
+        "Справа": dict(eye=dict(x=2.4, y=0.0, z=0.6)),
+    }
+    fig.update_layout(scene_camera=cameras[camera_name])
+
+
+if __name__ == "__main__":
+    main()

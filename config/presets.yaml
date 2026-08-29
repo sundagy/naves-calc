@@ -1,0 +1,79 @@
+original:
+  support_mode: EXISTING_10
+  allow_interior_columns: false
+  lower_count: 4
+  lower_positions_x: [0, 4, 8, 12]
+  lower_height_mm: 250
+  upper_count: 11
+  upper_height_mm: 250
+  lower_target_panel_length: 1.0
+  target_panel_length: 1.0
+  lower_chord_section: "60x40x3"
+  lower_web_section: "40x40x2"
+  upper_chord_section: "60x40x3"
+  upper_web_section: "40x40x2"
+  column_section: "80x80x3"
+
+variant_6x10:
+  support_mode: LOWER_TRUSS_ENDS
+  allow_interior_columns: false
+  lower_count: 6
+  lower_positions_x: null
+  lower_height_mm: 250
+  upper_count: 10
+  upper_height_mm: 600
+  lower_target_panel_length: 1.0
+  target_panel_length: 1.0
+  lower_chord_section: "60x40x3"
+  lower_web_section: "40x40x2"
+  upper_chord_section: "60x40x3"
+  upper_web_section: "40x40x2"
+  column_section: "80x80x3"
+
+variant_4_high:
+  support_mode: LOWER_TRUSS_ENDS
+  allow_interior_columns: false
+  lower_count: 4
+  lower_positions_x: null
+  lower_height_mm: 900
+  upper_count: 9
+  upper_height_mm: 250
+  lower_target_panel_length: 1.0
+  target_panel_length: 1.0
+  lower_chord_section: "60x40x3"
+  lower_web_section: "40x40x2"
+  upper_chord_section: "60x40x3"
+  upper_web_section: "40x40x2"
+  column_section: "80x80x3"
+
+variant_6_medium:
+  support_mode: LOWER_TRUSS_ENDS
+  allow_interior_columns: false
+  lower_count: 6
+  lower_positions_x: null
+  lower_height_mm: 550
+  upper_count: 9
+  upper_height_mm: 250
+  lower_target_panel_length: 1.0
+  target_panel_length: 1.0
+  lower_chord_section: "60x40x3"
+  lower_web_section: "40x40x2"
+  upper_chord_section: "60x40x3"
+  upper_web_section: "40x40x2"
+  column_section: "80x80x3"
+
+variant_7_medium:
+  support_mode: LOWER_TRUSS_ENDS
+  allow_interior_columns: false
+  lower_count: 7
+  lower_positions_x: null
+  lower_height_mm: 500
+  upper_count: 9
+  upper_height_mm: 250
+  lower_target_panel_length: 1.0
+  target_panel_length: 1.0
+  lower_chord_section: "60x40x3"
+  lower_web_section: "40x40x2"
+  upper_chord_section: "60x40x3"
+  upper_web_section: "40x40x2"
+  column_section: "80x80x3"
