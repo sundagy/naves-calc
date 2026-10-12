@@ -78,11 +78,13 @@ def test_naves_one_trapezoids_and_shared_support_nodes():
             assert isclose(top.y, bottom.y, abs_tol=1e-8)
             t = (top.x - tops[0].x) / (tops[-1].x - tops[0].x)
             assert isclose(bottom.z, bottoms[0].z + t * (bottoms[-1].z - bottoms[0].z), abs_tol=1e-8)
-        # Intersections must share nodes with the supporting B trusses.
+        # Bearings tie translations while keeping upper/lower rotations separate.
         for node_id in lower_top_ids:
             lower_top = model.nodes[node_id]
             if isclose(lower_top.y, tops[0].y, abs_tol=1e-8):
-                assert node_id in bottom_ids
+                bearing = dict(model.bearing_links)[node_id]
+                assert bearing in bottom_ids
+                assert model.nodes[bearing].coords == lower_top.coords
 
     # Each complete chord surface must fit one plane, not just each F truss.
     for rows in (model.upper_trusses, model.upper_bottom_trusses):
@@ -131,6 +133,7 @@ def test_naves_one_vertical_reactions_balance():
 @pytest.mark.parametrize("start,end", [(400, 170), (450, 200), (170, 400)])
 def test_upper_diagonals_do_not_exceed_500_mm(web_type, start, end):
     data = input_from_preset("naves_one")
+    data.upper_max_diagonal_mm = 500
     data.upper_web_type = web_type
     data.upper_height_mm, data.upper_end_height_mm = start, end
     model = generate_naves_one(data)
@@ -148,6 +151,7 @@ def test_upper_diagonals_do_not_exceed_500_mm(web_type, start, end):
 
 def test_upper_height_incompatible_with_diagonal_limit():
     data = input_from_preset("naves_one")
+    data.upper_max_diagonal_mm = 500
     data.upper_height_mm = 500
     with pytest.raises(ValueError, match="высоты верхних ферм должны быть меньше"):
         generate_naves_one(data)

@@ -1,0 +1,117 @@
+<div id="canopy-explained">
+<style>
+#canopy-explained {color:var(--foreground);max-width:1120px;margin:auto}
+#canopy-explained .examples,#canopy-explained .your-layout {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;margin-block:16px}
+#canopy-explained .scheme {width:100%;display:block}
+#canopy-explained h3 {margin-bottom:6px}
+#canopy-explained .scheme text {fill:var(--foreground);font-size:12px}
+#canopy-explained .scheme .steel {stroke:var(--viz-series-1);stroke-width:5;fill:none;stroke-linejoin:round;stroke-linecap:round}
+#canopy-explained .scheme .bracing {stroke:var(--viz-series-2);stroke-width:5;fill:none;stroke-linecap:round}
+#canopy-explained .scheme .moved {stroke:var(--viz-series-3);stroke-width:2;fill:none;stroke-dasharray:6 4}
+#canopy-explained .scheme .line {stroke:var(--foreground);stroke-width:1.4;fill:none}
+#canopy-explained .scheme .muted {stroke:var(--border);stroke-width:2;fill:none}
+#canopy-explained .scheme .force {stroke:var(--viz-series-4);stroke-width:2;fill:none}
+#canopy-explained .scheme .hinge {stroke:var(--foreground);stroke-width:1.5;fill:var(--background)}
+#canopy-explained .key {display:flex;gap:18px;flex-wrap:wrap}
+#canopy-explained .key i {display:inline-block;width:25px;vertical-align:middle;border-top:4px solid var(--viz-series-1);margin-right:6px}
+#canopy-explained .key .brace-key {border-color:var(--viz-series-2)}
+#canopy-explained .key .move-key {border-color:var(--viz-series-3);border-top:2px dashed var(--viz-series-3)}
+@media(max-width:660px){#canopy-explained .examples,#canopy-explained .your-layout{grid-template-columns:1fr}}
+</style>
+<h2>Что удерживает навес от перекоса</h2>
+<div class="key text-small"><span><i></i>Стойки и балки</span><span><i class="brace-key"></i>Связи / подкосы</span><span><i class="move-key"></i>Условный перекос</span></div>
+<div class="examples">
+<section><h3>1. Подвижные углы — каркас складывается</h3><svg class="scheme" data-example="hinged" role="img" aria-label="Рама с шарнирами превращается из прямоугольника в параллелограмм"></svg></section>
+<section><h3>2. Диагональ — образуются треугольники</h3><svg class="scheme" data-example="braced" role="img" aria-label="Диагональ связывает противоположные углы, препятствуя перекосу"></svg></section>
+<section><h3>3. Подкосы — удерживают верхние углы</h3><svg class="scheme" data-example="knees" role="img" aria-label="Короткие подкосы между стойкой и балкой удерживают угол соединения"></svg></section>
+<section><h3>4. Без диагоналей — работает жёсткая рама</h3><svg class="scheme" data-example="rigid" role="img" aria-label="Жёсткая рама сопротивляется перекосу изгибом стоек и балки; показаны условные изогнутые стойки"></svg></section>
+</div>
+<div class="text-small">Учебные схемы. Боковая стрелка — условное воздействие; величины деформаций не сравниваются.</div>
+<hr>
+<h2>Ваш навес: где находится вопрос</h2>
+<div class="your-layout">
+<section><h3>Вид сверху: B1 и B2 сходятся слева</h3><svg class="scheme" id="ce-plan" role="img" aria-label="Реальный контур навеса. B1 и B2 сходятся на K1-rear; эта общая опора соединяет только показанную часть каркаса"></svg></section>
+<section><h3>Вид сбоку: устойчивость зависит от узлов</h3><svg class="scheme" id="ce-own" role="img" aria-label="Условный фрагмент вашего навеса без подкосов. Выделены сварные узлы сверху и соединения стоек со сваями снизу"></svg></section>
+</div>
+<hr>
+<h3>Почему небольшой поворот основания имеет значение</h3>
+<label class="form-label" for="ce-angle">Условный поворот: <span id="ce-angle-value" class="tabular-nums">1,0°</span></label>
+<input class="form-range" id="ce-angle" type="range" min="0" max="1" step="0.1" value="1" aria-label="Условный поворот основания от нуля до одного градуса">
+<svg class="scheme" id="ce-rotation" role="img" aria-label="Геометрический пример: при повороте основания на один градус верх стойки высотой 2,57 метра смещается примерно на 45 миллиметров"></svg>
+<div id="ce-result" aria-live="polite"></div>
+<div class="text-small">Только геометрия поворота, без изгиба стойки. Угол на рисунке увеличен. 1° — пример, а не прогноз для ваших свай.</div>
+<script>
+(()=>{
+ const r=document.getElementById('canopy-explained');
+ const path=(d,c)=>`<path d="${d}" class="${c}"/>`;
+ const line=(x,y,a,b,c='line')=>path(`M${x},${y}L${a},${b}`,c);
+ const txt=(x,y,s,anchor='middle')=>`<text x="${x}" y="${y}" text-anchor="${anchor}">${s}</text>`;
+ const circle=(x,y,n=5)=>`<circle cx="${x}" cy="${y}" r="${n}" class="hinge"/>`;
+ function arrow(x,y,a,b){let t=Math.atan2(b-y,a-x);return line(x,y,a,b,'force')+path(`M${a-8*Math.cos(t-.45)},${b-8*Math.sin(t-.45)}L${a},${b}L${a-8*Math.cos(t+.45)},${b-8*Math.sin(t+.45)}`,'force');}
+ function foot(x,y,fixed){let out=line(x-17,y+13,x+17,y+13);if(fixed){out+=line(x,y,x,y+13,'steel');for(let dx=-14;dx<=14;dx+=7)out+=line(x+dx,y+13,x+dx-6,y+21);}else out+=path(`M${x},${y}l-10,13h20Z`,'line')+circle(x,y);return out;}
+ function box(svg,h){const w=Math.round(svg.getBoundingClientRect().width);svg.setAttribute('viewBox',`0 0 ${w} ${h}`);return w;}
+ function generic(svg){const w=box(svg,263),k=svg.dataset.example,x=w*.23,z=w*.73,y=55,b=193;let s='';
+ s+=arrow(12,87,x-13,87)+txt(12,74,'Толчок →','start');
+ s+=path(`M${x},${b}V${y}H${z}V${b}`,'steel')+foot(x,b,k==='rigid')+foot(z,b,k==='rigid');
+ if(k==='hinged'||k==='braced')s+=circle(x,y)+circle(z,y);
+ if(k==='hinged'){
+  s+=path(`M${x},${b}L${x+30},${y+3}H${z+30}L${z},${b}`,'moved');
+  s+=txt(w/2,22,'Кружки — свободно поворачивающиеся узлы');
+  s+=txt(w/2,243,'Углы меняются — прямоугольник перекашивается');
+ }else if(k==='braced'){
+  s+=line(x,b,z,y,'bracing');s+=txt(w/2,22,'Чтобы перекоситься, нужно изменить длину связи');
+  s+=txt(w/2,243,'Диагональ растягивается или сжимается');
+ }else if(k==='knees'){
+  s+=line(x,y+52,x+52,y,'bracing')+line(z-52,y,z,y+52,'bracing');
+  s+=txt(w/2,22,'Короткие наклонные трубы — подкосы');
+  s+=txt(w/2,243,'Углы держатся за счёт маленьких треугольников');
+ }else{
+  s+=path(`M${x},${y+17}h17v-17M${z-17},${y}v17h17`,'line');
+  s+=path(`M${x},${b}C${x},${b-55} ${x+23},${y+50} ${x+23},${y}Q${(x+z)/2+23},${y+6} ${z+23},${y}C${z+23},${y+50} ${z},${b-55} ${z},${b}`,'moved');
+  s+=txt(w/2,22,'Узлы и основания здесь приняты жёсткими');
+  s+=txt(w/2,243,'Нужен расчёт изгиба, узлов и оснований');
+ }svg.innerHTML=s;
+ }
+ function own(){const svg=r.querySelector('#ce-own'),w=box(svg,346),x=w*.22,z=w*.76,y=68,b=211;let s='';
+ s+=path(`M${x},${b}V${y}H${z}V${b}M${x},${y+21}H${z}`,'steel');
+ for(let i=0;i<6;i++)s+=line(x+(z-x)*i/6,y+(i%2?21:0),x+(z-x)*(i+1)/6,y+(i%2?0:21));
+ s+=txt(w/2,24,'Условный фрагмент, не развёртка всего навеса');
+ s+=arrow(w/2,30,w/2,56)+txt(w/2+18,44,'Снег ↓','start');
+ [x,z].forEach(a=>{s+=path(`M${a-13},${b}h26v74h-26Z`,'muted')+line(a-18,b,a+18,b,'steel');s+=`<circle cx="${a}" cy="${b}" r="13" class="force"/>`;});
+ s+=line(10,b+8,w-10,b+8,'muted');
+ s+=txt(w/2,137,'Подкосов нет')+txt(w/2,157,'Диагоналей между стойками нет');
+ s+=line(x,y+4,x-24,y-19)+txt(x-25,y-25,'Сварной узел','start');
+ s+=txt(w/2,249,'Стойка → швеллер → свая → грунт');
+ s+=txt(w/2,311,'Что препятствует повороту основания?');
+ s+=txt(w/2,332,'Это не установлено по одному факту сварки');svg.innerHTML=s;
+ }
+ function plan(){const svg=r.querySelector('#ce-plan'),w=box(svg,346),scale=Math.min((w-65)/12,24),ox=(w-12*scale)/2,oy=282;
+ const p=(x,y)=>[ox+x*scale,oy-y*scale],l=(x,y,a,b,c)=>line(...p(x,y),...p(a,b),c);const lx=y=>2.588*y/9.659,rx=y=>y<=7.03?12:12+(2.588-12)*(y-7.03)/2.629;
+ let s='';[0,1,2,3,4,5,6,7,7.848,8.696].forEach(y=>s+=l(lx(y)-.725,y,rx(y),y,'muted'));
+ [[6,8.725],[9,7.878],[12,7.03]].forEach(([x,y])=>s+=l(x,0,x,y,'line'));
+ s+=l(0,0,2.588,9.659,'steel')+l(2.588,0,2.588,9.659,'steel');
+ s+=l(0,0,12,0,'line')+l(2.588,9.659,12,7.03,'line');
+ [[0,0],[2.588,0],[6,0],[9,0],[12,0],[2.588,9.659],[6,8.725],[9,7.878],[12,7.03],[lx(4.829),4.829],[12,2.659],[12,4.829]].forEach(([x,y])=>{let [a,b]=p(x,y);s+=`<circle cx="${a}" cy="${b}" r="4" fill="var(--foreground)"/>`;});
+ let [a,b]=p(2.588,9.659);s+=txt(a,b-13,'K1-rear');
+ let v=p(lx(5.5),5.5);s+=txt(v[0]-12,v[1],'B1','end');v=p(2.588,4);s+=txt(v[0]+9,v[1],'B2','start');
+ s+=txt(w/2,307,'Общая опора B1–B2 уже есть в модели');
+ s+=txt(w/2,330,'Она не фиксирует все остальные углы каркаса');svg.innerHTML=s;
+ }
+ function rotate(){const svg=r.querySelector('#ce-rotation'),w=box(svg,258),theta=+r.querySelector('#ce-angle').value,shift=2.57*Math.sin(theta*Math.PI/180)*1000;
+ r.querySelector('#ce-angle-value').textContent=theta.toFixed(1).replace('.',',')+'°';
+ const x=w<500?w*.24:w*.32,y=48,b=210,dx=theta*42;let s='';
+ s+=line(x,y,x,b,'muted')+line(x,b,x+dx,y,'steel')+foot(x,b,false);
+ s+=line(x+dx,y,x+dx,21,'moved')+arrow(x,24,x+dx,24);
+ s+=txt(x-17,126,'2,57 м','end');
+ let tx=w<500?w*.57:w*.59;
+ s+=txt(tx,89,`${shift.toFixed(0)} мм`,'start')+txt(tx,112,'смещения верха','start');
+ s+=txt(tx,153,'Низ повернулся —','start')+txt(tx,173,'верх ушёл вбок','start');
+ s+=txt(x,252,'Условный поворот основания');
+ svg.innerHTML=s;
+ r.querySelector('#ce-result').textContent=`Пример: поворот ${theta.toFixed(1).replace('.',',')}° → смещение верха ${shift.toFixed(0)} мм при высоте стойки 2,57 м.`;
+ }
+ function draw(){r.querySelectorAll('[data-example]').forEach(generic);own();plan();rotate();}
+ r.querySelector('#ce-angle').addEventListener('input',rotate);new ResizeObserver(draw).observe(r);draw();
+})();
+</script>
+</div>

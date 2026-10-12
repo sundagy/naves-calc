@@ -18,6 +18,13 @@ class NodeRegistry:
     by_coord: dict[tuple[float, float, float], int] = field(default_factory=dict)
     next_id: int = 1
 
+    def independent(self, x: float, y: float, z: float, label: str, role: str) -> int:
+        """Coincident bearing node with independent rotational degrees of freedom."""
+        node_id = self.next_id
+        self.next_id += 1
+        self.nodes[node_id] = Node(node_id, float(x), float(y), float(z), label, {role})
+        return node_id
+
     def get(self, x: float, y: float, z: float, label: str, role: str) -> int:
         key = (round(x, COORD_ROUND), round(y, COORD_ROUND), round(z, COORD_ROUND))
         if key in self.by_coord:
@@ -143,7 +150,9 @@ def generate_model(data: CanopyInput) -> StructuralModel:
         loaded_roof_area=plan.area,
     )
     validate_connectivity(model)
-    return model
+    from src.geometry.refinement import refine_beams
+
+    return refine_beams(model, data.fem_subdivisions)
 
 
 def validate_connectivity(model: StructuralModel) -> None:
@@ -157,7 +166,19 @@ def validate_connectivity(model: StructuralModel) -> None:
 
     fixed = set(model.support_node_ids)
     for column in model.columns:
-        if column.top_node not in adjacency or column.base_node not in adjacency[column.top_node]:
+        column_adjacency: dict[int, set[int]] = defaultdict(set)
+        for element in model.elements:
+            if element.role == "column" and element.group == column.name:
+                column_adjacency[element.i].add(element.j)
+                column_adjacency[element.j].add(element.i)
+        connected = {column.base_node}
+        queue = deque(connected)
+        while queue:
+            for neighbor in column_adjacency[queue.popleft()]:
+                if neighbor not in connected:
+                    connected.add(neighbor)
+                    queue.append(neighbor)
+        if column.top_node not in connected:
             raise ValueError(f"Column {column.name} is not connected to the structural graph.")
         if not ({"lower_top", "lower_bottom"} & model.nodes[column.top_node].roles) and not any(
             constrained == column.top_node and "crossbeam" in model.nodes[retained].roles

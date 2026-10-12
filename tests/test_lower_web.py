@@ -20,14 +20,15 @@ def test_lower_web_does_not_change_when_upper_trusses_move(monkeypatch, web_type
     monkeypatch.setattr(naves_one, "UPPER_YS", (0.0, 0.8, 2.2, 3.4, 4.3, 5.2, 6.4, 7.3, 8.0, 8.696))
     moved = naves_one.generate_naves_one(data)
     assert web_geometry(moved) == web_geometry(original)
-    # Every F/B intersection remains a shared node, including off-panel bearings.
+    # Every F/B intersection transfers vertical displacement through a bearing.
+    bearings = dict(moved.bearing_links)
     lower_tops = {node for row in moved.lower_trusses.values() for node in row}
     web_nodes = {node for e in moved.elements if e.role == "lower_web" for node in (e.i, e.j)}
     off_panel = set()
     for row in moved.upper_bottom_trusses.values():
         y = moved.nodes[row[0]].y
         intersections = {node for node in lower_tops if moved.nodes[node].y == y}
-        assert intersections <= set(row)
+        assert {bearings[node] for node in intersections} <= set(row)
         off_panel.update(intersections - web_nodes)
     assert off_panel
     for node in off_panel:

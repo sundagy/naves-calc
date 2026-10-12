@@ -6,7 +6,7 @@ from plotly.colors import sample_colorscale
 
 from src.geometry.canopy import CanopyPlan, roof_plane_from_input
 from src.loads.snow_sp20 import snow_design_pressure_kpa
-from src.loads.tributary import tributary_roof_loads
+from src.loads.scenarios import PATTERNS, snow_pattern_loads
 from src.models import CanopyInput, StructuralModel
 from src.sections.database import section_database
 from src.sections.rhs import RHSSection
@@ -28,9 +28,11 @@ def model_figure(
     result=None,
     mode: str = "GEOMETRY",
     deformation_scale: float = 20.0,
+    displacement_component: str = "UZ",
 ) -> go.Figure:
     fig = go.Figure()
-    if mode != "REALISTIC":
+    realistic = mode in ("REALISTIC", "REALISTIC_DEFORMED")
+    if not realistic:
         _add_roof(fig, data, model)
 
     disp = {}
@@ -46,8 +48,17 @@ def model_figure(
         elif mode == "UTILIZATION":
             element_values = dict(zip(result.elements["element"], result.elements["utilization"]))
 
-    if mode == "REALISTIC":
-        _add_realistic_elements(fig, model)
+    if realistic:
+        deformed = mode == "REALISTIC_DEFORMED"
+        _add_realistic_elements(fig, model, disp if deformed else {}, deformation_scale)
+        if deformed:
+            fig.update_layout(title=dict(
+                text=(f"Деформированный каркас · масштаб ×{deformation_scale:g}" if disp
+                      else "Исходный каркас · для деформаций выполните расчёт"),
+                font=dict(size=15),
+            ))
+    elif mode == "DISPLACEMENT" and disp:
+        _add_displacements(fig, model, disp, displacement_component)
     elif mode == "DEFORMED" and disp:
         _add_elements(fig, model, {}, "Исходная", opacity=0.25)
         _add_elements(fig, model, disp, "Деформированная", deformation_scale, opacity=1.0)
@@ -55,8 +66,13 @@ def model_figure(
         _add_colored_elements(fig, model, element_values, mode)
     else:
         _add_elements(fig, model, {}, "Геометрия", opacity=0.3 if mode == "SNOW_LOAD" else 1.0)
+        if mode == "DISPLACEMENT":
+            fig.add_annotation(
+                text="Для карты перемещений выполните успешный расчёт — нажмите «Рассчитать».",
+                x=0.5, y=1.0, xref="paper", yref="paper", showarrow=False,
+            )
 
-    if mode != "REALISTIC":
+    if not realistic:
         _add_supports(fig, model)
     fig.update_layout(
         scene=dict(
@@ -70,7 +86,7 @@ def model_figure(
     )
     if mode == "SNOW_LOAD":
         _add_snow_load(fig, data, model)
-    if mode == "REALISTIC":
+    if realistic:
         fig.update_layout(
             scene=dict(
                 xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False),
@@ -87,11 +103,11 @@ def _add_snow_load(fig: go.Figure, data: CanopyInput, model: StructuralModel) ->
         data.snow_sg_kpa, data.snow_ce, data.snow_ct,
         roof_plane_from_input(data), data.snow_gamma_f, data.snow_mu,
     )
-    loads = tributary_roof_loads(data, model, pressure)
+    loads = snow_pattern_loads(data, model, pressure)
     total_kn = abs(sum(loads.values())) / 1000.0
     fig.update_layout(
         title=dict(
-            text=f"Снег: q = {pressure:.3f} кН/м² · A = {model.loaded_roof_area:.2f} м²"
+            text=f"{PATTERNS[data.snow_pattern]}: q = {pressure:.3f} кН/м² · A кровли = {model.loaded_roof_area:.2f} м²"
                  f" · ΣF = {total_kn:.2f} кН",
             font=dict(size=15),
         ),
@@ -122,8 +138,7 @@ def _add_snow_load(fig: go.Figure, data: CanopyInput, model: StructuralModel) ->
         tips_y.append(node.y)
         tips_z.append(node.z)
         forces.append(force)
-        area = (model.roof_tributary_areas[node_id] if model.roof_tributary_areas is not None
-                else force / pressure)
+        area = force / pressure
         details.append([node_id, area, force])
 
     scale = [[0, "#9ecae1"], [1, "#08519c"]]
@@ -177,7 +192,10 @@ def _rhs_mesh(start, end, section: RHSSection, width_axis) -> tuple[np.ndarray, 
     return np.asarray(vertices), np.asarray(triangles)
 
 
-def _add_realistic_elements(fig: go.Figure, model: StructuralModel) -> None:
+def _add_realistic_elements(
+    fig: go.Figure, model: StructuralModel, disp: dict | None = None, scale: float = 1.0,
+) -> None:
+    disp = disp or {}
     sections = section_database()
     vertices, triangles, labels = [], [], []
     for element in model.elements:
@@ -192,12 +210,16 @@ def _add_realistic_elements(fig: go.Figure, model: StructuralModel) -> None:
             first, last = model.nodes[row[0]], model.nodes[row[-1]]
             width_axis = (-(last.y - first.y), last.x - first.x, 0.0)
         points, faces = _rhs_mesh(
-            model.nodes[element.i].coords, model.nodes[element.j].coords,
+            _node_xyz(model, element.i, disp, scale), _node_xyz(model, element.j, disp, scale),
             sections[element.section], width_axis,
         )
         triangles.extend(faces + len(vertices))
         vertices.extend(points)
         label = f"{_element_kind(element.role)} {element.group}<br>{element.section} мм"
+        if disp:
+            uz_i = disp.get(element.i, (0.0, 0.0, 0.0))[2] * 1000
+            uz_j = disp.get(element.j, (0.0, 0.0, 0.0))[2] * 1000
+            label += f"<br>Uz концов: {uz_i:.3f} / {uz_j:.3f} мм<br>Масштаб изображения: ×{scale:g}"
         labels.extend([label] * len(points))
     if not vertices:
         return
@@ -209,7 +231,7 @@ def _add_realistic_elements(fig: go.Figure, model: StructuralModel) -> None:
         lighting=dict(ambient=0.38, diffuse=0.8, specular=0.9, roughness=0.28, fresnel=0.25),
         lightposition=dict(x=1000, y=-1500, z=2000),
         hovertext=labels, hovertemplate="%{hovertext}<extra></extra>",
-        name="Стальной каркас", showlegend=False,
+        name="Деформированный стальной каркас" if disp else "Стальной каркас", showlegend=False,
     ))
 
 
@@ -270,6 +292,57 @@ def _add_colored_elements(fig: go.Figure, model: StructuralModel, values: dict[i
                 hovertemplate="%{hovertext}<extra></extra>",
             )
         )
+
+
+def _add_displacements(fig: go.Figure, model: StructuralModel, disp: dict, component: str) -> None:
+    if component not in ("UZ", "TOTAL"):
+        raise ValueError(f"Unknown displacement component: {component}")
+    node_ids = [node_id for node_id in model.nodes if node_id in disp]
+    vectors = {node_id: np.asarray(disp[node_id]) * 1000.0 for node_id in node_ids}
+    totals = {node_id: float(np.linalg.norm(vector)) for node_id, vector in vectors.items()}
+    values = {node_id: abs(vector[2]) if component == "UZ" else totals[node_id]
+              for node_id, vector in vectors.items()}
+    maximum_node = max(values, key=values.get)
+    maximum = values[maximum_node]
+    label = "|Uz|" if component == "UZ" else "|U|"
+    color_range = dict(colorscale=[[0, "#2166ac"], [0.35, "#1a9850"],
+                                  [0.65, "#fee08b"], [1, "#d73027"]],
+                       cmin=0, cmax=maximum if maximum > 0 else 1.0)
+    xs, ys, zs, colors = [], [], [], []
+    for element in model.elements:
+        if element.i not in values or element.j not in values:
+            continue
+        for node_id in (element.i, element.j):
+            node = model.nodes[node_id]
+            xs.append(node.x)
+            ys.append(node.y)
+            zs.append(node.z)
+            colors.append(values[node_id])
+        xs.append(None)
+        ys.append(None)
+        zs.append(None)
+        colors.append(0)
+    fig.add_trace(go.Scatter3d(
+        x=xs, y=ys, z=zs, mode="lines", showlegend=False, hoverinfo="skip",
+        line=dict(color=colors, width=6, **color_range),
+    ))
+    fig.add_trace(go.Scatter3d(
+        x=[model.nodes[n].x for n in node_ids],
+        y=[model.nodes[n].y for n in node_ids],
+        z=[model.nodes[n].z for n in node_ids],
+        mode="markers", name="Перемещения узлов", showlegend=False,
+        marker=dict(size=3, color=[values[n] for n in node_ids], **color_range,
+                    showscale=True, colorbar=dict(title=f"{label}, мм",
+                    **({"tickvals": [0], "ticktext": ["0"]} if maximum == 0 else {}))),
+        customdata=[[n, *vectors[n], totals[n]] for n in node_ids],
+        hovertemplate="Узел %{customdata[0]:.0f}<br>Ux = %{customdata[1]:.3f} мм"
+                      "<br>Uy = %{customdata[2]:.3f} мм<br>Uz = %{customdata[3]:.3f} мм"
+                      "<br>|U| = %{customdata[4]:.3f} мм<extra></extra>",
+    ))
+    fig.update_layout(title=dict(
+        text=f"Перемещения {label} · максимум {maximum:.3f} мм · узел {maximum_node}",
+        font=dict(size=15),
+    ))
 
 
 def _value_color(value: float, vmin: float, vmax: float, colorscale: str) -> str:

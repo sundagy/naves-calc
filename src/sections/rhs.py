@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 
 
 @dataclass(frozen=True)
@@ -10,6 +11,12 @@ class RHSSection:
     height: float
     thickness: float
     rho: float = 7850.0
+
+    def __post_init__(self) -> None:
+        if not all(isfinite(v) and v > 0 for v in (self.width, self.height, self.thickness, self.rho)):
+            raise ValueError("Section dimensions, thickness and density must be finite and positive")
+        if 2 * self.thickness >= min(self.width, self.height):
+            raise ValueError("Tube thickness leaves no hollow core")
 
     @property
     def area(self) -> float:
@@ -51,7 +58,14 @@ class RHSSection:
 
     @property
     def torsion_j(self) -> float:
-        return self.ix + self.iy
+        # Thin-walled closed section: J ≈ 4 A_m² t / p_m.
+        # SCI P385, Appendix B.2.3. Square corners, uniform wall thickness;
+        # this is an approximation, not a manufacturer's section-table value.
+        mean_width = self.width - self.thickness
+        mean_height = self.height - self.thickness
+        mean_area = mean_width * mean_height
+        mean_perimeter = 2 * (mean_width + mean_height)
+        return 4 * mean_area**2 * self.thickness / mean_perimeter
 
 
 def parse_rhs(name: str) -> RHSSection:
@@ -67,4 +81,3 @@ def parse_rhs(name: str) -> RHSSection:
         height=height_mm / 1000.0,
         thickness=thickness_mm / 1000.0,
     )
-

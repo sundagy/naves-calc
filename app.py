@@ -9,6 +9,9 @@ import streamlit as st
 from src.checks.axial import top_utilized
 from src.config import input_from_preset, load_presets, load_sections
 from src.fem.opensees_solver import VERTICAL_BALANCE_TOLERANCE_KN, solve_model
+from src.fem.assumptions import model_limitations
+from src.fem.scenarios import solve_snow_suite
+from src.loads.scenarios import PATTERNS
 from src.geometry.canopy import CanopyPlan, roof_plane_from_input
 from src.geometry.columns import ORIGINAL_SUPPORTS_BY_TRUSS
 from src.geometry.naves_one import generate_naves_one, roof_area as naves_one_roof_area, upper_truss_dimensions
@@ -38,6 +41,34 @@ def main() -> None:
         st.session_state["variants"] = []
 
     data = sidebar_inputs(presets, sections)
+    if data.fixed_base_hypothesis_accepted and data.base_fixity == BaseFixity.FIXED:
+        st.sidebar.info("Принята гипотеза: основания всех стоек жёстко защемлены. Сваи, грунт и закладные отдельно не проверены.")
+    if data.project_notes:
+        with st.sidebar.expander("Исходные сведения от заказчика"):
+            for note in data.project_notes.values():
+                st.write(note)
+    if data.steel_grade == "UNKNOWN":
+        st.sidebar.warning(f"Марка стали неизвестна. Ry={data.steel_resistance_mpa:g} МПа принято условно; показатели использования не подтверждают прочность фактического металла.")
+    with st.sidebar.expander("Дополнительные проверки", expanded=True):
+        data.snow_pattern = st.selectbox("Схема снега", list(PATTERNS), format_func=PATTERNS.get)
+        st.caption("Половинные загружения — исследовательские сценарии, не полный набор схем СП 20.")
+        data.spatial_diagnostic = st.checkbox("Диагностика без искусственных закреплений")
+        if data.spatial_diagnostic:
+            st.warning("Существующие вертикальные связи опирания сохранены. Без реальных пространственных связей возможен механизм. Это диагностический режим.")
+        run_suite = st.checkbox("Рассчитать все снеговые сценарии")
+        st.caption("Расчётные длины для индикатора Эйлера задаются по метке физического элемента; длина КЭ не используется.")
+        lengths = st.data_editor(
+            pd.DataFrame({"Элемент": pd.Series(dtype=str), "Расчётная длина, м": pd.Series(dtype=float)}),
+            num_rows="dynamic", hide_index=True, key="effective_lengths",
+            column_config={"Элемент": st.column_config.TextColumn(required=True),
+                           "Расчётная длина, м": st.column_config.NumberColumn(min_value=0.001, required=True)},
+        )
+        for _, row in lengths.iterrows():
+            label, length = row["Элемент"], row["Расчётная длина, м"]
+            if pd.isna(label) or pd.isna(length) or not 0 < length < float("inf") or label in data.effective_lengths_m:
+                st.error("Укажите уникальную метку элемента и положительную конечную расчётную длину.")
+                return
+            data.effective_lengths_m[label] = float(length)
     plan = CanopyPlan(width=data.width, left_depth=data.left_depth, right_depth=data.right_depth)
     roof = roof_plane_from_input(data)
 
@@ -54,17 +85,34 @@ def main() -> None:
 
     mode = st.selectbox(
         "Режим визуализации",
-        ["GEOMETRY", "REALISTIC", "DEFORMED", "AXIAL_FORCE", "DISPLACEMENT", "UTILIZATION", "REACTIONS", "SNOW_LOAD"],
+        ["GEOMETRY", "REALISTIC", "REALISTIC_DEFORMED", "DEFORMED", "AXIAL_FORCE", "DISPLACEMENT", "UTILIZATION", "REACTIONS", "SNOW_LOAD"],
         index=0,
-        format_func=lambda value: "Реалистичный" if value == "REALISTIC" else value,
+        format_func=lambda value: {
+            "REALISTIC": "Реалистичный",
+            "REALISTIC_DEFORMED": "Реалистичный — деформированный",
+            "DISPLACEMENT": "Перемещения",
+        }.get(value, value),
     )
-    scale = st.select_slider("Масштаб деформаций", options=[1, 5, 10, 20, 50, 100], value=20)
+    displacement_component = "UZ"
+    if mode == "DISPLACEMENT":
+        displacement_component = st.radio(
+            "Перемещение для цветовой карты", ["UZ", "TOTAL"], horizontal=True,
+            format_func=lambda value: "Вертикальное |Uz|" if value == "UZ" else "Суммарное |U|",
+        )
+    scale = st.select_slider("Масштаб деформаций", options=[1, 5, 10, 20, 50, 100], value=20,
+                             disabled=mode == "DISPLACEMENT")
     calculate = st.button("Рассчитать", type="primary")
 
     result = None
     if calculate:
         with st.spinner("OpenSeesPy: линейный статический расчёт..."):
+            unknown = set(data.effective_lengths_m) - {e.label for e in model.elements}
+            if unknown:
+                st.error(f"Неизвестные метки элементов: {', '.join(sorted(unknown))}")
+                return
             result = solve_model(data, model)
+            if run_suite:
+                result.scenarios = solve_snow_suite(data, model)
         st.session_state["last_result"] = result
         st.session_state["last_input"] = data
         st.session_state["last_model"] = model
@@ -75,7 +123,8 @@ def main() -> None:
         elif last_input is not None and mode != "SNOW_LOAD":
             st.info("Параметры изменены. Нажмите «Рассчитать», чтобы обновить нагрузки и реакции.")
 
-    fig = model_figure(data, model, result, mode=mode, deformation_scale=scale)
+    fig = model_figure(data, model, result, mode=mode, deformation_scale=scale,
+                       displacement_component=displacement_component)
     camera_name = st.radio("Камера", ["Изометрия", "План", "Спереди", "Сзади", "Слева", "Справа"], horizontal=True)
     projection = st.radio(
         "Проекция", ["Перспективная", "Ортогональная"], horizontal=True,
@@ -99,6 +148,18 @@ def main() -> None:
     with st.container(key="model_viewport", height=500, border=True):
         st.plotly_chart(fig, width="stretch", height="stretch")
     st.caption("Потяните за нижний правый угол 3D-вида, чтобы изменить его высоту.")
+    if mode == "DISPLACEMENT":
+        st.caption(
+            "Перемещения от снега, постоянной нагрузки кровли и собственного веса каркаса. "
+            "Цвет показывает величину перемещения в мм на исходной геометрии: синий — ноль, "
+            "красный — максимум. При наведении на узел показаны Ux, Uy, Uz со знаком и |U|. "
+            "Отрицательное Uz означает перемещение вниз."
+        )
+    if mode == "REALISTIC_DEFORMED":
+        st.caption(
+            "Перемещения узлов увеличены выбранным масштабом; размеры сечений и толщина стенки сохранены. "
+            "Каждый конечный элемент показан прямым отрезком трубы между смещёнными узлами."
+        )
     if mode == "SNOW_LOAD":
         st.caption(
             "Расчётная снеговая нагрузка обновляется без запуска МКЭ. "
@@ -118,6 +179,13 @@ def sidebar_inputs(presets: dict[str, dict], sections: list[str]) -> CanopyInput
     st.sidebar.header("Параметры")
     preset_name = st.sidebar.selectbox("Preset", list(presets), index=0)
     data = input_from_preset(preset_name)
+    data.fem_subdivisions = st.sidebar.select_slider(
+        "Детализация МКЭ: частей на балочный элемент",
+        options=[1, 2, 4, 8, 16], value=4,
+        help="В NavesOne делит оба пояса верхних и нижних ферм, стойки и перекладины. 1 — исходная сетка. "
+             "Решётка и точки приложения нагрузки от кровли сохраняются. "
+             "Дополнительные узлы свободны, без новых закреплений.",
+    )
     if preset_name == "naves_one":
         return naves_one_inputs(data, sections)
 
@@ -248,14 +316,14 @@ def naves_one_inputs(data: CanopyInput, sections: list[str]) -> CanopyInput:
     )
     snow_total_kn = snow_pressure_kpa * naves_one_roof_area()
     st.sidebar.metric(
-        "Общий вес снега", f"{snow_total_kn / G_ACCEL:.2f} т",
+        "Вес равномерного снега на всю кровлю", f"{snow_total_kn / G_ACCEL:.2f} т",
         help="Эквивалентная масса расчётной снеговой нагрузки на всю кровлю, с учётом gamma_f. Без веса конструкции и кровли.",
     )
     st.sidebar.caption(f"{snow_total_kn:.2f} кН = {snow_pressure_kpa:.3f} кН/м² × {naves_one_roof_area():.2f} м²")
     st.sidebar.subheader("Расчётные допущения")
     data.base_fixity = BaseFixity(st.sidebar.selectbox("Закрепление оснований", [item.value for item in BaseFixity]))
     data.steel_price_per_kg = st.sidebar.number_input("Сталь, руб/кг", 0.0, 1000.0, data.steel_price_per_kg, 5.0)
-    st.sidebar.warning("Схема предварительная: горизонтальные перемещения узлов закреплены в МКЭ; соединения, основания и свойства кровли требуют уточнения.")
+    st.sidebar.warning("Схема предварительная: соединения, пространственные связи, основания и свойства кровли требуют уточнения.")
     return data
 
 
@@ -274,8 +342,15 @@ def geometry_summary(model, data: CanopyInput) -> None:
 
 
 def show_results(data: CanopyInput, model, result) -> None:
+    st.error("Надёжность по снеговой нагрузке не подтверждена: полный набор проверок не выполнен.")
+    st.dataframe(result.checks, hide_index=True, use_container_width=True)
+    if not result.scenarios.empty:
+        st.subheader("Отдельные снеговые сценарии")
+        st.dataframe(result.scenarios, hide_index=True, use_container_width=True)
+        st.caption("Экстремумы относятся к разным загружениям. Нормативный снег показан отдельно; допустимый относительный прогиб ещё не проверен.")
     if not result.ok:
         st.error(result.message)
+        st.download_button("Экспорт диагностики HTML", html_report(data, result), "diagnostics.html")
         return
     cost = cost_breakdown(data, model)
     max_util = float(result.elements["utilization"].max())
@@ -288,16 +363,26 @@ def show_results(data: CanopyInput, model, result) -> None:
     cols[4].metric("Max Rz", f"{max_reaction:.1f} кН")
     cols[5].metric(
         "Max util (осевое)", f"{max_util:.2f}",
-        help="max |N|/(A·Ry): только осевые напряжения. Устойчивость, изгиб и соединения не проверяются.",
+        help="max |N|/(A·Ry): только осевые напряжения. Полные проверки устойчивости и соединений не выполнены; N–M показано отдельно.",
     )
     cols[6].metric("Стоимость", f"{cost['total_cost']:,.0f} руб")
     st.caption(
         "Max util = max |N|/(A·Ry), Ry = "
         f"{data.steel_resistance_mpa:g} МПа. Это не полная проверка несущей способности. "
-        "В текущей модели горизонтальные перемещения всех узлов закреплены: "
-        "такие закрепления воспринимают горизонтальные усилия и меняют работу ферм. "
-        "Баланс вертикальных нагрузок не подтверждает корректность этой расчётной схемы."
+        + ("В вертикальной идеализации искусственные закрепления меняют работу ферм. " if not data.spatial_diagnostic else "Диагностика не заменяет восстановление реальных пространственных связей. ")
+        + "Баланс вертикальных нагрузок не подтверждает корректность этой расчётной схемы."
     )
+    st.metric("Макс. упругие напряжения N–M / Ry", f"{result.elements.elastic_NM_util.max():.2f}")
+    st.caption("Учитываются осевая сила и изгиб по двум осям. Это проверка нормальных напряжений в текущей модели, без устойчивости, среза и кручения. Эйлер < 1 также не означает прохождение СП 16.")
+    with st.expander("Проверка расчётной схемы и искусственных закреплений"):
+        st.write(model_limitations(data))
+        if not result.artificial_reactions.empty:
+            reactions = result.artificial_reactions.copy()
+            reactions["Rh_kN"] = (reactions["Rx_kN"]**2 + reactions["Ry_kN"]**2)**0.5
+            st.metric("Макс. горизонтальная реакция искусственной связи", f"{reactions['Rh_kN'].max():.3f} кН")
+            st.caption("Реакции закреплений вне оснований стоек. Ненулевые значения показывают, "
+                       "что искусственные связи участвуют в передаче нагрузки. Моменты приведены в кН·м.")
+            st.dataframe(reactions.sort_values("Rh_kN", ascending=False), hide_index=True)
 
     lb = result.load_breakdown
     st.info(
@@ -329,6 +414,9 @@ def show_results(data: CanopyInput, model, result) -> None:
             "input": asdict(data),
             "summary": variant_summary("current", data, model, result),
             "loads": asdict(result.load_breakdown),
+            "reliability_confirmed": result.reliability_confirmed,
+            "checks": result.checks.to_dict(orient="records"),
+            "scenarios": result.scenarios.to_dict(orient="records"),
         }
         st.download_button("Export JSON", json.dumps(export_payload, ensure_ascii=False, indent=2, default=str), "naves-calc.json")
         st.download_button("Export elements CSV", result.elements.to_csv(index=False), "elements.csv")

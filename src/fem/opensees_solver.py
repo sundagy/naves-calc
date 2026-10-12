@@ -1,16 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import dist
 
 import pandas as pd
 
+from src.checks.member import member_screening
+from src.checks.readiness import assessment
+from src.loads.scenarios import snow_pattern_loads
 from src.geometry.canopy import roof_plane_from_input
+from src.fem.assumptions import beam_width_axis, node_restraints
 from src.loads.self_weight import G_ACCEL, mass_breakdown, self_weight_nodal_loads
 from src.loads.snow_sp20 import snow_design_pressure_kpa
 from src.loads.tributary import tributary_roof_loads
 from src.materials.steel import SteelMaterial
-from src.models import BaseFixity, CanopyInput, LoadBreakdown, StructuralModel
+from src.models import CanopyInput, LoadBreakdown, StructuralModel
 from src.sections.database import section_database
 
 
@@ -26,6 +30,11 @@ class FEMResult:
     max_abs_n_kn: float
     total_reaction_z_n: float
     message: str = ""
+    artificial_reactions: pd.DataFrame = field(default_factory=pd.DataFrame)
+    checks: pd.DataFrame = field(default_factory=pd.DataFrame)
+    scenarios: pd.DataFrame = field(default_factory=pd.DataFrame)
+    scenario: str = "UNIFORM"
+    reliability_confirmed: bool = False
 
 
 VERTICAL_BALANCE_TOLERANCE_KN = 1e-6
@@ -83,7 +92,7 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
         data.snow_gamma_f,
         data.snow_mu,
     )
-    snow_loads = tributary_roof_loads(data, model, sd_kpa)
+    snow_loads = snow_pattern_loads(data, model, sd_kpa)
     dead_loads = tributary_roof_loads(data, model, data.roof_dead_load_kpa)
     self_loads = self_weight_nodal_loads(model, steel)
     nodal_loads: dict[int, float] = {}
@@ -95,33 +104,18 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
     ops.model("BasicBuilder", "-ndm", 3, "-ndf", 6)
     for node in model.nodes.values():
         ops.node(node.id, node.x, node.y, node.z)
-    for node_id in model.support_node_ids:
-        if data.base_fixity == BaseFixity.PINNED:
-            ops.fix(node_id, 1, 1, 1, 0, 0, 0)
-        else:
-            ops.fix(node_id, 1, 1, 1, 1, 1, 1)
-    chord_nodes = {node_id for e in model.elements if e.is_beam for node_id in (e.i, e.j)}
-    web_nodes = {node_id for e in model.elements if e.role == "lower_web" for node_id in (e.i, e.j)}
-    chord_bearing_nodes = chord_nodes - web_nodes
-    for node_id in model.nodes:
-        if node_id not in model.support_node_ids:
-            # Splitting a continuous chord at a bearing must not add a rotational clamp.
-            rotation_fixed = 0 if node_id in chord_bearing_nodes else 1
-            ops.fix(node_id, 1, 1, 0, rotation_fixed, rotation_fixed, rotation_fixed)
+    restraints = node_restraints(data, model)
+    for node_id, fixed in restraints.items():
+        ops.fix(node_id, *fixed)
 
     ops.uniaxialMaterial("Elastic", 1, steel.E)
-    ops.geomTransf("Linear", 1, 0.0, 1.0, 0.0)
     for retained, constrained in model.bearing_links:
         ops.equalDOF(retained, constrained, 3)
     for element in model.elements:
         section = sections[element.section]
         if element.role in ("column", "crossbeam") or element.is_beam:
-            transform = 1
-            if element.is_beam:
-                ni, nj = model.nodes[element.i], model.nodes[element.j]
-                # Local section depth is vertical in the truss plane, including B1.
-                transform = element.id + 1
-                ops.geomTransf("Linear", transform, -(nj.y - ni.y), nj.x - ni.x, 0.0)
+            transform = element.id
+            ops.geomTransf("Linear", transform, *beam_width_axis(model, element))
             ops.element(
                 "elasticBeamColumn",
                 element.id,
@@ -145,7 +139,7 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
 
     ops.constraints("Transformation" if model.bearing_links else "Plain")
     ops.numberer("RCM")
-    ops.system("BandGeneral")
+    ops.system("UmfPack" if model.mesh_node_ids else "BandGeneral")
     ops.test("NormDispIncr", 1e-12, 20)
     # Correct the residual after the first solve for closely spaced bearing nodes.
     ops.algorithm("Newton")
@@ -156,6 +150,18 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
         return _failed_result(data, model, steel, snow_loads, dead_loads, self_loads, nodal_loads, mu, s0_kpa, sd_kpa, code)
 
     ops.reactions()
+    artificial_rows = []
+    reaction_columns = ("Rx_kN", "Ry_kN", "Rz_kN", "Mx_kNm", "My_kNm", "Mz_kNm")
+    for node_id, fixed in restraints.items():
+        if node_id in model.support_node_ids:
+            continue
+        reaction = ops.nodeReaction(node_id)
+        artificial_rows.append({
+            "node": node_id, "label": model.nodes[node_id].label,
+            "fixed_dofs": ", ".join(name for name, flag in zip(("Ux", "Uy", "Uz", "Rx", "Ry", "Rz"), fixed) if flag),
+            **{name: float(reaction[k]) / 1000 if fixed[k] else 0.0
+               for k, name in enumerate(reaction_columns)},
+        })
     displacement_rows = []
     displacements: dict[int, tuple[float, float, float]] = {}
     for node in model.nodes.values():
@@ -189,6 +195,9 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
                 "Rx_kN": float(reaction[0]) / 1000.0,
                 "Ry_kN": float(reaction[1]) / 1000.0,
                 "Rz_kN": rz / 1000.0,
+                "Mx_kNm": float(reaction[3]) / 1000.0,
+                "My_kNm": float(reaction[4]) / 1000.0,
+                "Mz_kNm": float(reaction[5]) / 1000.0,
             }
         )
 
@@ -213,6 +222,14 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
         axial_extension = sum((uj[k] - ui[k]) * direction[k] for k in range(3))
         section = sections[element.section]
         axial_n = steel.E * section.area / length * axial_extension
+        local_force = None
+        if element.is_beam or element.role in ("column", "crossbeam"):
+            local_force = list(ops.eleResponse(element.id, "localForce"))
+            if len(local_force) != 12:
+                raise RuntimeError("OpenSees did not return 12 local beam forces")
+            axial_n = (local_force[6] - local_force[0]) / 2
+        screening = member_screening(section, steel, axial_n, local_force,
+                                     data.effective_lengths_m.get(element.label))
         stress_pa = axial_n / section.area
         utilization = abs(stress_pa) / steel.resistance_pa
         element_rows.append(
@@ -222,19 +239,21 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
                 "j": element.j,
                 "role": element.role,
                 "group": element.group,
+                "label": element.label,
                 "section": element.section,
                 "length_m": length,
                 "mass_kg": section.area * length * steel.rho,
                 "N_kN": axial_n / 1000.0,
                 "stress_MPa": stress_pa / 1e6,
                 "utilization": utilization,
+                **screening,
             }
         )
 
     loads_rows = [{"node": node_id, "Fz_kN": fz / 1000.0} for node_id, fz in sorted(nodal_loads.items())]
     max_uz_mm = min(row["Uz_mm"] for row in displacement_rows)
     max_abs_n_kn = max(abs(row["N_kN"]) for row in element_rows) if element_rows else 0.0
-    return FEMResult(
+    result = FEMResult(
         ok=True,
         nodes=pd.DataFrame(displacement_rows),
         elements=pd.DataFrame(element_rows),
@@ -244,7 +263,11 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
         max_uz_mm=max_uz_mm,
         max_abs_n_kn=max_abs_n_kn,
         total_reaction_z_n=total_reaction_z,
+        artificial_reactions=pd.DataFrame(artificial_rows),
+        scenario=data.snow_pattern,
     )
+    result.checks = assessment(data, model, result)
+    return result
 
 
 def _failed_result(
@@ -260,7 +283,7 @@ def _failed_result(
     sd_kpa: float,
     code: int,
 ) -> FEMResult:
-    return FEMResult(
+    result = FEMResult(
         ok=False,
         nodes=pd.DataFrame(),
         elements=pd.DataFrame(),
@@ -273,5 +296,9 @@ def _failed_result(
         max_uz_mm=0.0,
         max_abs_n_kn=0.0,
         total_reaction_z_n=0.0,
-        message=f"OpenSees analysis failed with code {code}. Model is likely unstable.",
+        message=f"OpenSees: код {code}. Решение не получено; возможен механизм или плохая обусловленность. Искусственная стабилизация не добавлялась.",
+        scenario=data.snow_pattern,
     )
+
+    result.checks = assessment(data, model, result)
+    return result

@@ -76,6 +76,7 @@ class CanopyInput:
     support_mode: SupportMode = SupportMode.EXISTING_10
     allow_interior_columns: bool = False
     base_fixity: BaseFixity = BaseFixity.FIXED
+    fixed_base_hypothesis_accepted: bool = False
     column_joint: BaseFixity = BaseFixity.PINNED
     truss_joint_model: JointModel = JointModel.PINNED
     truss_type: TrussType = TrussType.RECTANGULAR
@@ -94,6 +95,7 @@ class CanopyInput:
     snow_ct: float = 1.0
     snow_mu: float | None = None
     snow_gamma_f: float = 1.4
+    project_notes: dict[str, str] = field(default_factory=dict)
     steel_grade: str = "C245"
     steel_resistance_mpa: float = 245.0
     steel_price_per_kg: float = 95.0
@@ -102,6 +104,11 @@ class CanopyInput:
     foundation_cost: float = 0.0
     connection_cost: float = 0.0
     structure_mode: StructureMode = StructureMode.TWO_LEVEL
+    fem_subdivisions: int = 1
+    spatial_diagnostic: bool = False
+    snow_pattern: str = "UNIFORM"
+    # Physical member labels survive FE subdivision. No mesh-length fallback.
+    effective_lengths_m: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.support_mode = SupportMode(self.support_mode)
@@ -167,6 +174,8 @@ class StructuralModel:
     additional_dead_mass_kg: float = 0.0
     # Vertical bearing ties: retained beam-axis node -> column/truss node.
     bearing_links: list[tuple[int, int]] = field(default_factory=list)
+    # Internal beam mesh nodes have no artificial displacement/rotation restraints.
+    mesh_node_ids: set[int] = field(default_factory=set)
 
 
 @dataclass

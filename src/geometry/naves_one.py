@@ -178,6 +178,7 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
         lower_trusses[name] = top_nodes
 
     roof_node_ids: list[int] = []
+    bearing_links: list[tuple[int, int]] = []
     tributary_areas: dict[int, float] = {}
     for row_index, y in enumerate(UPPER_YS):
         name = f"F{row_index + 1}"
@@ -194,10 +195,17 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
             if match is None:
                 bottom_nodes.append(nodes.get(x, y, top_z - upper_height_at(data, x, y), f"{name}-bottom-{x:.3f}", "upper_bottom"))
             else:
-                bottom_nodes.append(lower_top_at[(match, round(y, 8))])
+                # Transfer vertical load without rigidly joining the rotations
+                # of orthogonal continuous chords or inheriting a lower-web clamp.
+                retained = lower_top_at[(match, round(y, 8))]
+                bearing = nodes.independent(*nodes.nodes[retained].coords,
+                                            f"{name}-bearing-{x:.3f}", "upper_bottom")
+                bottom_nodes.append(bearing)
+                bearing_links.append((retained, bearing))
         for row, label in ((top_nodes, "top"), (bottom_nodes, "bottom")):
             for a, b in zip(row, row[1:]):
-                elements.add(a, b, "upper_chord", name, data.upper_chord_section, f"{name} {label} chord")
+                elements.add(a, b, "upper_chord", name, data.upper_chord_section,
+                             f"{name} {label} chord", is_beam=True)
         add_web_pattern(elements, top_nodes, bottom_nodes, "upper_web", name, data.upper_web_section, WebType(data.upper_web_type))
         upper_trusses[name] = top_nodes
         upper_bottom_trusses[name] = bottom_nodes
@@ -212,7 +220,6 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
 
     columns: list[Column] = []
     support_node_ids: list[int] = []
-    bearing_links: list[tuple[int, int]] = []
     beam_rows: dict[str, list[int]] = {"front": [], "rear": []}
     sections = section_database()
     beam_height = sections[CROSSBEAM_SECTION].height
@@ -261,17 +268,27 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
                if data.column_height_mm is not None else "Отметки кровли сохранены, высоты стоек пересчитаны."),
             "Стержневая идеализация по листам 2–5 PDF; узлы и закрепления требуют подтверждения инженером.",
             "Связи 40×20×1,5 учтены собственным весом 251,31 кг по спецификации, без их жёсткости.",
-            "В текущем МКЭ горизонтальные перемещения всех узлов закреплены; результаты описывают только вертикальную идеализацию.",
+            "В текущем МКЭ горизонтальные перемещения исходных узлов закреплены; результаты описывают только вертикальную идеализацию.",
             "Решётка нижних ферм имеет равномерный шаг независимо от стоек и верхних ферм. "
             "Узлы опирания добавлены только в пояса, без дополнительных стоек решётки. "
             "Оба пояса учтены балочными элементами "
             "с закреплёнными поворотами в узлах решётки; дополнительные узлы опирания "
             "не закрепляют поворот пояса.",
+            "Оба пояса верхних ферм — непрерывные балочные цепочки с учётом изгиба и детализации МКЭ. "
+            "Решётка остаётся шарнирной. Опирание на нижние фермы передаёт вертикальное перемещение "
+            "без связи поворотов; нагрузка кровли приложена в исходных узлах. "
+            "В начале каждого верхнего пояса задана одна фиксация Rx для исключения свободного "
+            "вращения вокруг его оси; поворот Ry при изгибе в плоскости фермы свободен.",
             "Перекладины учтены балочными элементами с закреплёнными поворотами узлов; "
-            "опирание передаёт вертикальные перемещения. Проверка изгиба и соединений не выполняется.",
+            "опирание передаёт вертикальные перемещения. Нормальные напряжения N–M проверяются; полная проверка прочности и соединений не выполняется.",
         ],
     )
+    if data.spatial_diagnostic:
+        from src.fem.assumptions import model_limitations
+        model.warnings = model.warnings[:5] + [model_limitations(data)]
     if abs(sum(tributary_areas.values()) - model.loaded_roof_area) > 1e-7:
         raise ValueError("Roof tributary areas do not cover the drawing outline")
     validate_connectivity(model)
-    return model
+    from src.geometry.refinement import refine_beams
+
+    return refine_beams(model, data.fem_subdivisions)
