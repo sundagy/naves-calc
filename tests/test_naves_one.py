@@ -9,6 +9,7 @@ from src.fem.opensees_solver import solve_model
 from src.geometry.naves_one import generate_naves_one, left_x
 from src.loads.self_weight import mass_breakdown
 from src.loads.tributary import tributary_roof_loads
+from src.sections.database import section_database
 
 
 def test_naves_one_drawing_geometry_and_load_path():
@@ -31,13 +32,15 @@ def test_naves_one_drawing_geometry_and_load_path():
     assert any(isclose(model.nodes[node_id].y, 2.659) for node_id in model.lower_trusses["B1"])
     assert len(model.lower_trusses) == 5
     assert len(model.upper_trusses) == 10
-    assert isclose(model.nodes[model.columns[0].top_node].z, 2.601, abs_tol=0.002)
-    assert isclose(model.nodes[model.columns[4].top_node].z, 2.400, abs_tol=0.002)
+    offset = 0.1 + section_database()[data.lower_chord_section].height / 2
+    assert isclose(model.nodes[model.columns[0].top_node].z, 2.601 - offset, abs_tol=0.002)
+    assert isclose(model.nodes[model.columns[4].top_node].z, 2.400 - offset, abs_tol=0.002)
     assert isclose(sum(model.roof_tributary_areas.values()), model.loaded_roof_area, abs_tol=1e-8)
     assert isclose(sum(tributary_roof_loads(data, model, 1.0).values()), -model.loaded_roof_area * 1000, abs_tol=1e-6)
 
     # Compare with the drawing schedule minus K6 (23.42 kg).
-    schedule_mass = 2882.91 - 23.42
+    schedule_mass = (2882.91 - 23.42 + mass_breakdown(model)["crossbeams"]
+                     - 9 * offset * section_database()[data.column_section].mass_per_m)
     assert abs(mass_breakdown(model)["total"] - schedule_mass) / schedule_mass < 0.05
 
 
@@ -87,7 +90,7 @@ def test_naves_one_trapezoids_and_shared_support_nodes():
 
 
 @pytest.mark.parametrize("lower,start,end", [(500, 400, 170), (600, 450, 200), (500, 300, 300)])
-def test_naves_one_equal_columns_with_editable_truss_heights(lower, start, end):
+def test_naves_one_bearing_elevations_with_editable_truss_heights(lower, start, end):
     data = input_from_preset("naves_one")
     data.lower_height_mm = lower
     data.upper_height_mm = start
@@ -98,7 +101,9 @@ def test_naves_one_equal_columns_with_editable_truss_heights(lower, start, end):
         base = model.nodes[column.base_node]
         top = model.nodes[column.top_node]
         assert base.z == 0.0
-        assert isclose(top.z - base.z, 2.7, abs_tol=1e-8)
+        offset = (0.1 + section_database()[data.lower_chord_section].height / 2
+                  if column.name == "K7" or column.name.endswith(("-front", "-rear")) else 0.0)
+        assert isclose(top.z - base.z, 2.7 - offset, abs_tol=1e-8)
     for row in model.upper_bottom_trusses.values():
         for node_id in row:
             assert isclose(model.nodes[node_id].z, 2.7 + lower / 1000, abs_tol=1e-8)

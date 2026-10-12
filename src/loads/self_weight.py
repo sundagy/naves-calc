@@ -24,7 +24,7 @@ def element_mass(model: StructuralModel, element: Element, steel: SteelMaterial 
 
 
 def mass_breakdown(model: StructuralModel, steel: SteelMaterial | None = None) -> dict[str, float]:
-    result = {"lower": 0.0, "upper": 0.0, "columns": 0.0, "total": 0.0}
+    result = {"lower": 0.0, "upper": 0.0, "columns": 0.0, "crossbeams": 0.0, "total": 0.0}
     for element in model.elements:
         mass = element_mass(model, element, steel)
         if element.role.startswith("lower"):
@@ -33,6 +33,8 @@ def mass_breakdown(model: StructuralModel, steel: SteelMaterial | None = None) -
             result["upper"] += mass
         elif element.role == "column":
             result["columns"] += mass
+        elif element.role == "crossbeam":
+            result["crossbeams"] += mass
         result["total"] += mass
     result["upper"] += model.additional_dead_mass_kg
     result["total"] += model.additional_dead_mass_kg

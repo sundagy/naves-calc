@@ -151,12 +151,18 @@ def validate_connectivity(model: StructuralModel) -> None:
     for element in model.elements:
         adjacency[element.i].add(element.j)
         adjacency[element.j].add(element.i)
+    for retained, constrained in model.bearing_links:
+        adjacency[retained].add(constrained)
+        adjacency[constrained].add(retained)
 
     fixed = set(model.support_node_ids)
     for column in model.columns:
         if column.top_node not in adjacency or column.base_node not in adjacency[column.top_node]:
             raise ValueError(f"Column {column.name} is not connected to the structural graph.")
-        if not ({"lower_top", "lower_bottom"} & model.nodes[column.top_node].roles):
+        if not ({"lower_top", "lower_bottom"} & model.nodes[column.top_node].roles) and not any(
+            constrained == column.top_node and "crossbeam" in model.nodes[retained].roles
+            for retained, constrained in model.bearing_links
+        ):
             raise ValueError(f"Column {column.name} top node is not a real lower truss node.")
 
     for roof_node_id in model.roof_node_ids:

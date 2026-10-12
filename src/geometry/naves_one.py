@@ -11,6 +11,7 @@ from math import dist, isclose
 from src.geometry.canopy import roof_plane_from_input
 from src.geometry.truss import ElementRegistry, NodeRegistry, add_web_pattern, validate_connectivity
 from src.models import CanopyInput, Column, StructuralModel, WebType
+from src.sections.database import section_database
 
 
 WIDTH = 12.0
@@ -25,6 +26,7 @@ REAR_YS = (9.659, 8.725, 7.878, 7.030)
 REAR_COLUMN_NAMES = ("K1-rear", "K2-rear", "K3-rear", "K4-rear")
 UPPER_YS = (0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 7.848, 8.696)
 OUTLINE = [(0.0, 0.0), (WIDTH, 0.0), (WIDTH, RIGHT_REAR_Y), (LEFT_REAR_X, LEFT_REAR_Y)]
+CROSSBEAM_SECTION = "100x100x3"
 
 
 def left_x(y: float) -> float:
@@ -202,14 +204,35 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
 
     columns: list[Column] = []
     support_node_ids: list[int] = []
+    bearing_links: list[tuple[int, int]] = []
+    beam_rows: dict[str, list[int]] = {"front": [], "rear": []}
+    sections = section_database()
+    beam_height = sections[CROSSBEAM_SECTION].height
+    lower_half_height = sections[data.lower_chord_section].height / 2.0
     for name, x, y in supports:
         match = next(i for i in range(5) if (isclose(x, left_x(y), abs_tol=1e-7) if i == 0 else isclose(x, FRONT_XS[i], abs_tol=1e-7)) and y <= (LEFT_REAR_Y, *REAR_YS)[i] + 1e-8)
         top_id = lower_bottom_at[(match, round(y, 8))]
+        row = "front" if name in FRONT_COLUMN_NAMES else "rear" if name in REAR_COLUMN_NAMES else None
+        if row is not None:
+            truss_id = top_id
+            truss_z = nodes.nodes[truss_id].z
+            beam_id = nodes.get(x, y, truss_z - lower_half_height - beam_height / 2.0,
+                                f"{row}-{name}-axis", "crossbeam")
+            top_z = truss_z - lower_half_height - beam_height
+            if top_z <= 0:
+                raise ValueError("Недостаточная высота стойки для установки перекладины.")
+            top_id = nodes.get(x, y, top_z, f"{name}-top", "column_top")
+            beam_rows[row].append(beam_id)
+            bearing_links.extend([(beam_id, top_id), (beam_id, truss_id)])
         nodes.nodes[top_id].roles.add("column_top")
         base_id = nodes.get(x, y, 0.0, f"{name}-base", "support")
         elements.add(base_id, top_id, "column", name, data.column_section, name)
         columns.append(Column(name, x, y, base_id, top_id))
         support_node_ids.append(base_id)
+
+    for row, beam_nodes in beam_rows.items():
+        for a, b in zip(beam_nodes, beam_nodes[1:]):
+            elements.add(a, b, "crossbeam", row, CROSSBEAM_SECTION, f"Перекладина {row}")
 
     model = StructuralModel(
         nodes=nodes.nodes, elements=elements.elements, columns=columns,
@@ -218,16 +241,21 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
         support_node_ids=support_node_ids, loaded_roof_area=roof_area(),
         roof_outline=OUTLINE, roof_tributary_areas=tributary_areas,
         additional_dead_mass_kg=105.64 + 145.67,
+        bearing_links=bearing_links,
         warnings=[
             "Изменённая схема: 12 стоек, K6 на оси 1–Б исключена из исходного чертежа.",
+            "Перекладины front (включая K7) и rear: 100×100×3 мм. "
+            f"Отметки ферм сохранены; стойки под перекладинами укорочены на {(beam_height + lower_half_height) * 1000:g} мм.",
             f"Нижние фермы В: {data.lower_height_mm:g} мм; верхние Ф: "
             f"F1 — {upper_start_height * 1000:g} → {upper_end_height * 1000:g} мм; "
             f"F2–F10 — от {upper_start_height * 1000:g} мм со стороны K5 с тем же уклоном поясов, что у F1. "
-            + (f"Все стойки {data.column_height_mm:g} мм; отметки кровли рассчитаны по высотам ферм."
+            + (f"Исходная отметка опирания нижних ферм {data.column_height_mm:g} мм; отметки кровли рассчитаны по высотам ферм."
                if data.column_height_mm is not None else "Отметки кровли сохранены, высоты стоек пересчитаны."),
             "Стержневая идеализация по листам 2–5 PDF; узлы и закрепления требуют подтверждения инженером.",
             "Связи 40×20×1,5 учтены собственным весом 251,31 кг по спецификации, без их жёсткости.",
             "В текущем МКЭ горизонтальные перемещения всех узлов закреплены; результаты описывают только вертикальную идеализацию.",
+            "Перекладины учтены балочными элементами с закреплёнными поворотами узлов; "
+            "опирание передаёт вертикальные перемещения. Проверка изгиба и соединений не выполняется.",
         ],
     )
     if abs(sum(tributary_areas.values()) - model.loaded_roof_area) > 1e-7:

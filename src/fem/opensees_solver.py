@@ -40,8 +40,9 @@ def _load_breakdown(data, model, steel, mu, s0_kpa, sd_kpa, snow_loads, dead_loa
     lower_kn = masses["lower"] * G_ACCEL / 1000.0
     upper_kn = masses["upper"] * G_ACCEL / 1000.0
     columns_kn = masses["columns"] * G_ACCEL / 1000.0
-    components_kn = snow_kn + dead_kn + lower_kn + upper_kn + columns_kn
-    if abs(self_kn - (lower_kn + upper_kn + columns_kn)) >= VERTICAL_BALANCE_TOLERANCE_KN:
+    crossbeams_kn = masses["crossbeams"] * G_ACCEL / 1000.0
+    components_kn = snow_kn + dead_kn + lower_kn + upper_kn + columns_kn + crossbeams_kn
+    if abs(self_kn - (lower_kn + upper_kn + columns_kn + crossbeams_kn)) >= VERTICAL_BALANCE_TOLERANCE_KN:
         raise ValueError("Structural self-weight groups do not sum to total self-weight")
     if abs(applied_kn - (snow_kn + dead_kn + self_kn)) >= VERTICAL_BALANCE_TOLERANCE_KN:
         raise ValueError("Snow, roof dead load and structural self-weight do not sum to applied load")
@@ -58,6 +59,7 @@ def _load_breakdown(data, model, steel, mu, s0_kpa, sd_kpa, snow_loads, dead_loa
         lower_trusses_self_weight_kN=lower_kn,
         upper_trusses_self_weight_kN=upper_kn,
         columns_self_weight_kN=columns_kn,
+        crossbeams_self_weight_kN=crossbeams_kn,
         total_self_weight_kN=self_kn,
         total_applied_vertical_load_kN=applied_kn,
         sum_vertical_reactions_kN=reaction_n / 1000.0,
@@ -104,9 +106,11 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
 
     ops.uniaxialMaterial("Elastic", 1, steel.E)
     ops.geomTransf("Linear", 1, 0.0, 1.0, 0.0)
+    for retained, constrained in model.bearing_links:
+        ops.equalDOF(retained, constrained, 3)
     for element in model.elements:
         section = sections[element.section]
-        if element.role == "column":
+        if element.role in ("column", "crossbeam"):
             ops.element(
                 "elasticBeamColumn",
                 element.id,
@@ -128,7 +132,7 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
     for node_id, fz in nodal_loads.items():
         ops.load(node_id, 0.0, 0.0, fz, 0.0, 0.0, 0.0)
 
-    ops.constraints("Plain")
+    ops.constraints("Transformation" if model.bearing_links else "Plain")
     ops.numberer("RCM")
     ops.system("BandGeneral")
     ops.test("NormDispIncr", 1e-8, 20)

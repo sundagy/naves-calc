@@ -72,7 +72,7 @@ def main() -> None:
         last_input = st.session_state.get("last_input")
         if last_input is not None and asdict(last_input) == asdict(data):
             result = st.session_state.get("last_result")
-        elif last_input is not None:
+        elif last_input is not None and mode != "SNOW_LOAD":
             st.info("Параметры изменены. Нажмите «Рассчитать», чтобы обновить нагрузки и реакции.")
 
     fig = model_figure(data, model, result, mode=mode, deformation_scale=scale)
@@ -99,6 +99,13 @@ def main() -> None:
     with st.container(key="model_viewport", height=500, border=True):
         st.plotly_chart(fig, width="stretch", height="stretch")
     st.caption("Потяните за нижний правый угол 3D-вида, чтобы изменить его высоту.")
+    if mode == "SNOW_LOAD":
+        st.caption(
+            "Расчётная снеговая нагрузка обновляется без запуска МКЭ. "
+            "Длина и цвет стрелок показывают силу в узле; масштаб длины нормирован "
+            "по максимальной силе текущей схемы. Наведите на узел или наконечник, "
+            "чтобы увидеть силу и грузовую площадь."
+        )
 
     geometry_summary(model, data)
     if result is not None:
@@ -200,7 +207,10 @@ def naves_one_inputs(data: CanopyInput, sections: list[str]) -> CanopyInput:
             "Шаг решётки подбирается автоматически; высоты F должны быть меньше этого предела."
         )
     if data.column_height_mm is not None:
-        st.sidebar.caption(f"Высота всех стоек: {data.column_height_mm:g} мм от общей отметки основания.")
+        st.sidebar.caption(
+            f"Исходная отметка опирания нижних ферм: {data.column_height_mm:g} мм. "
+            "Стойки front/rear укорочены под перекладины 100×100×3 мм."
+        )
     st.sidebar.dataframe(
         pd.DataFrame(upper_truss_dimensions(data)),
         hide_index=True, width="stretch", height=388,
@@ -254,7 +264,7 @@ def geometry_summary(model, data: CanopyInput) -> None:
             st.caption(warning)
     else:
         st.caption(f"Original supports: {ORIGINAL_SUPPORTS_BY_TRUSS}")
-    st.caption(f"Масса до расчёта: нижние {masses['lower']:.1f} кг, верхние {masses['upper']:.1f} кг, стойки {masses['columns']:.1f} кг.")
+    st.caption(f"Масса до расчёта: нижние {masses['lower']:.1f} кг, верхние {masses['upper']:.1f} кг, стойки {masses['columns']:.1f} кг, перекладины {masses['crossbeams']:.1f} кг.")
 
 
 def show_results(data: CanopyInput, model, result) -> None:
@@ -291,7 +301,7 @@ def show_results(data: CanopyInput, model, result) -> None:
     balance_fields = (
         "snow_load_total_kN", "roof_dead_load_total_kN",
         "lower_trusses_self_weight_kN", "upper_trusses_self_weight_kN",
-        "columns_self_weight_kN", "total_self_weight_kN",
+        "columns_self_weight_kN", "crossbeams_self_weight_kN", "total_self_weight_kN",
         "total_applied_vertical_load_kN", "sum_vertical_reactions_kN",
     )
     st.subheader("Баланс вертикальной нагрузки, кН")

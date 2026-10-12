@@ -164,6 +164,8 @@ class StructuralModel:
     roof_outline: list[tuple[float, float]] | None = None
     roof_tributary_areas: dict[int, float] | None = None
     additional_dead_mass_kg: float = 0.0
+    # Vertical bearing ties: retained beam-axis node -> column/truss node.
+    bearing_links: list[tuple[int, int]] = field(default_factory=list)
 
 
 @dataclass
@@ -186,3 +188,4 @@ class LoadBreakdown:
     total_self_weight_kN: float
     total_applied_vertical_load_kN: float
     sum_vertical_reactions_kN: float
+    crossbeams_self_weight_kN: float = 0.0
