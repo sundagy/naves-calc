@@ -14,6 +14,28 @@ original:
   upper_web_section: "40x40x2"
   column_section: "80x80x3"
 
+naves_one:
+  width: 12.0
+  left_depth: 9.659
+  right_depth: 7.030
+  lower_count: 5
+  lower_positions_x: null
+  upper_count: 10
+  lower_height_mm: 600
+  upper_height_mm: 400
+  upper_end_height_mm: 170
+  upper_max_diagonal_mm: 800
+  front_left_height: 3.801
+  front_right_height: 3.600
+  rear_left_height: 3.801
+  lower_chord_section: "60x60x3"
+  lower_web_section: "40x40x2"
+  upper_chord_section: "60x60x3"
+  upper_web_section: "40x40x2"
+  column_section: "120x120x3"
+  column_height_mm: 2700
+  support_mode: CUSTOM
+
 variant_6x10:
   support_mode: LOWER_TRUSS_ENDS
   allow_interior_columns: false

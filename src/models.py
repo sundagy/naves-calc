@@ -62,11 +62,17 @@ class CanopyInput:
     upper_count: int = 11
     lower_height_mm: float = 250.0
     upper_height_mm: float = 250.0
+    # NavesOne: F1 depth opposite K5 sets the taper for all F trusses.
+    # None keeps parallel chords.
+    upper_end_height_mm: float | None = None
+    upper_max_diagonal_mm: float | None = None
     lower_chord_section: str = "60x40x3"
     lower_web_section: str = "40x40x2"
     upper_chord_section: str = "60x40x3"
     upper_web_section: str = "40x40x2"
     column_section: str = "80x80x3"
+    # NavesOne: uniform column height; None uses explicit roof elevations.
+    column_height_mm: float | None = None
     support_mode: SupportMode = SupportMode.EXISTING_10
     allow_interior_columns: bool = False
     base_fixity: BaseFixity = BaseFixity.FIXED
@@ -155,6 +161,9 @@ class StructuralModel:
     support_node_ids: list[int]
     loaded_roof_area: float
     warnings: list[str] = field(default_factory=list)
+    roof_outline: list[tuple[float, float]] | None = None
+    roof_tributary_areas: dict[int, float] | None = None
+    additional_dead_mass_kg: float = 0.0
 
 
 @dataclass
@@ -169,3 +178,11 @@ class LoadBreakdown:
     dead_load_kpa: float
     total_roof_load_n: float
     total_self_weight_n: float
+    snow_load_total_kN: float
+    roof_dead_load_total_kN: float
+    lower_trusses_self_weight_kN: float
+    upper_trusses_self_weight_kN: float
+    columns_self_weight_kN: float
+    total_self_weight_kN: float
+    total_applied_vertical_load_kN: float
+    sum_vertical_reactions_kN: float

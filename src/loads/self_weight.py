@@ -34,6 +34,8 @@ def mass_breakdown(model: StructuralModel, steel: SteelMaterial | None = None) -
         elif element.role == "column":
             result["columns"] += mass
         result["total"] += mass
+    result["upper"] += model.additional_dead_mass_kg
+    result["total"] += model.additional_dead_mass_kg
     return result
 
 
@@ -43,5 +45,10 @@ def self_weight_nodal_loads(model: StructuralModel, steel: SteelMaterial | None 
         weight = element_mass(model, element, steel) * G_ACCEL
         loads[element.i] -= weight / 2.0
         loads[element.j] -= weight / 2.0
+    if model.additional_dead_mass_kg:
+        if not model.roof_tributary_areas:
+            raise ValueError("Supplementary mass requires roof tributary areas")
+        area = sum(model.roof_tributary_areas.values())
+        for node_id, node_area in model.roof_tributary_areas.items():
+            loads[node_id] -= model.additional_dead_mass_kg * G_ACCEL * node_area / area
     return dict(loads)
-

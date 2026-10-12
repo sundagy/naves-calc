@@ -6,7 +6,7 @@ from math import dist
 import pandas as pd
 
 from src.geometry.canopy import roof_plane_from_input
-from src.loads.self_weight import self_weight_nodal_loads
+from src.loads.self_weight import G_ACCEL, mass_breakdown, self_weight_nodal_loads
 from src.loads.snow_sp20 import snow_design_pressure_kpa
 from src.loads.tributary import tributary_roof_loads
 from src.materials.steel import SteelMaterial
@@ -26,6 +26,42 @@ class FEMResult:
     max_abs_n_kn: float
     total_reaction_z_n: float
     message: str = ""
+
+
+VERTICAL_BALANCE_TOLERANCE_KN = 1e-6
+
+
+def _load_breakdown(data, model, steel, mu, s0_kpa, sd_kpa, snow_loads, dead_loads, self_loads, nodal_loads, reaction_n):
+    masses = mass_breakdown(model, steel)
+    snow_kn = -sum(snow_loads.values()) / 1000.0
+    dead_kn = -sum(dead_loads.values()) / 1000.0
+    self_kn = -sum(self_loads.values()) / 1000.0
+    applied_kn = -sum(nodal_loads.values()) / 1000.0
+    lower_kn = masses["lower"] * G_ACCEL / 1000.0
+    upper_kn = masses["upper"] * G_ACCEL / 1000.0
+    columns_kn = masses["columns"] * G_ACCEL / 1000.0
+    components_kn = snow_kn + dead_kn + lower_kn + upper_kn + columns_kn
+    if abs(self_kn - (lower_kn + upper_kn + columns_kn)) >= VERTICAL_BALANCE_TOLERANCE_KN:
+        raise ValueError("Structural self-weight groups do not sum to total self-weight")
+    if abs(applied_kn - (snow_kn + dead_kn + self_kn)) >= VERTICAL_BALANCE_TOLERANCE_KN:
+        raise ValueError("Snow, roof dead load and structural self-weight do not sum to applied load")
+    if abs(applied_kn - components_kn) >= VERTICAL_BALANCE_TOLERANCE_KN:
+        raise ValueError(f"Vertical load components do not sum to applied load: {components_kn} vs {applied_kn} kN")
+    return LoadBreakdown(
+        sg_kpa=data.snow_sg_kpa, ce=data.snow_ce, ct=data.snow_ct,
+        mu=mu, gamma_f=data.snow_gamma_f, s0_kpa=s0_kpa, sd_kpa=sd_kpa,
+        dead_load_kpa=data.roof_dead_load_kpa,
+        total_roof_load_n=(snow_kn + dead_kn) * 1000.0,
+        total_self_weight_n=self_kn * 1000.0,
+        snow_load_total_kN=snow_kn,
+        roof_dead_load_total_kN=dead_kn,
+        lower_trusses_self_weight_kN=lower_kn,
+        upper_trusses_self_weight_kN=upper_kn,
+        columns_self_weight_kN=columns_kn,
+        total_self_weight_kN=self_kn,
+        total_applied_vertical_load_kN=applied_kn,
+        sum_vertical_reactions_kN=reaction_n / 1000.0,
+    )
 
 
 def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
@@ -101,7 +137,7 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
     ops.analysis("Static")
     code = ops.analyze(1)
     if code != 0:
-        return _failed_result(data, model, nodal_loads, mu, s0_kpa, sd_kpa, code)
+        return _failed_result(data, model, steel, snow_loads, dead_loads, self_loads, nodal_loads, mu, s0_kpa, sd_kpa, code)
 
     ops.reactions()
     displacement_rows = []
@@ -138,6 +174,16 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
                 "Ry_kN": float(reaction[1]) / 1000.0,
                 "Rz_kN": rz / 1000.0,
             }
+        )
+
+    breakdown = _load_breakdown(
+        data, model, steel, mu, s0_kpa, sd_kpa,
+        snow_loads, dead_loads, self_loads, nodal_loads, total_reaction_z,
+    )
+    if abs(breakdown.total_applied_vertical_load_kN - breakdown.sum_vertical_reactions_kN) >= VERTICAL_BALANCE_TOLERANCE_KN:
+        raise ValueError(
+            "Vertical reactions do not balance applied load: "
+            f"{breakdown.sum_vertical_reactions_kN} vs {breakdown.total_applied_vertical_load_kN} kN"
         )
 
     element_rows = []
@@ -178,18 +224,7 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
         elements=pd.DataFrame(element_rows),
         reactions=pd.DataFrame(reaction_rows),
         loads=pd.DataFrame(loads_rows),
-        load_breakdown=LoadBreakdown(
-            sg_kpa=data.snow_sg_kpa,
-            ce=data.snow_ce,
-            ct=data.snow_ct,
-            mu=mu,
-            gamma_f=data.snow_gamma_f,
-            s0_kpa=s0_kpa,
-            sd_kpa=sd_kpa,
-            dead_load_kpa=data.roof_dead_load_kpa,
-            total_roof_load_n=-(sum(snow_loads.values()) + sum(dead_loads.values())),
-            total_self_weight_n=-sum(self_loads.values()),
-        ),
+        load_breakdown=breakdown,
         max_uz_mm=max_uz_mm,
         max_abs_n_kn=max_abs_n_kn,
         total_reaction_z_n=total_reaction_z,
@@ -199,6 +234,10 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
 def _failed_result(
     data: CanopyInput,
     model: StructuralModel,
+    steel: SteelMaterial,
+    snow_loads: dict[int, float],
+    dead_loads: dict[int, float],
+    self_loads: dict[int, float],
     nodal_loads: dict[int, float],
     mu: float,
     s0_kpa: float,
@@ -211,17 +250,9 @@ def _failed_result(
         elements=pd.DataFrame(),
         reactions=pd.DataFrame(),
         loads=pd.DataFrame([{"node": node_id, "Fz_kN": fz / 1000.0} for node_id, fz in sorted(nodal_loads.items())]),
-        load_breakdown=LoadBreakdown(
-            sg_kpa=data.snow_sg_kpa,
-            ce=data.snow_ce,
-            ct=data.snow_ct,
-            mu=mu,
-            gamma_f=data.snow_gamma_f,
-            s0_kpa=s0_kpa,
-            sd_kpa=sd_kpa,
-            dead_load_kpa=data.roof_dead_load_kpa,
-            total_roof_load_n=0.0,
-            total_self_weight_n=0.0,
+        load_breakdown=_load_breakdown(
+            data, model, steel, mu, s0_kpa, sd_kpa,
+            snow_loads, dead_loads, self_loads, nodal_loads, 0.0,
         ),
         max_uz_mm=0.0,
         max_abs_n_kn=0.0,

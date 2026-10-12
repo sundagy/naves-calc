@@ -19,6 +19,10 @@ def tributary_roof_loads(
     t_min: float = 0.0,
     t_max: float = 1.0,
 ) -> dict[int, float]:
+    if model.roof_tributary_areas is not None:
+        if t_min != 0.0 or t_max != 1.0:
+            raise ValueError("Partial snow zones are not defined for the NavesOne outline")
+        return {node_id: -pressure_kpa * 1000.0 * area for node_id, area in model.roof_tributary_areas.items()}
     plan = CanopyPlan(width=data.width, left_depth=data.left_depth, right_depth=data.right_depth)
     upper_ts = upper_truss_positions(data)
     loads = defaultdict(float)

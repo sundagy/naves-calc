@@ -70,6 +70,19 @@ class RoofPlane:
 
 
 def roof_plane_from_input(data: CanopyInput) -> RoofPlane:
+    if data.preset_name == "naves_one" and data.column_height_mm is not None:
+        # Import locally: the drawing generator also uses this shared roof plane.
+        from src.geometry.naves_one import LEFT_REAR_X, LEFT_REAR_Y, UPPER_OVERHANG, WIDTH
+
+        if data.column_height_mm <= 0:
+            raise ValueError("Column height must be positive")
+        start_height = data.upper_height_mm / 1000.0
+        end_height = (data.upper_end_height_mm / 1000.0
+                      if data.upper_end_height_mm is not None else start_height)
+        a = (end_height - start_height) / (WIDTH + UPPER_OVERHANG)
+        b = -a * LEFT_REAR_X / LEFT_REAR_Y
+        c = (data.column_height_mm + data.lower_height_mm) / 1000.0 + start_height + a * UPPER_OVERHANG
+        return RoofPlane(a=a, b=b, c=c, width=WIDTH, right_depth=data.right_depth)
     a = (data.front_right_height - data.front_left_height) / data.width
     b = (data.rear_left_height - data.front_left_height) / data.left_depth
     c = data.front_left_height
@@ -88,4 +101,3 @@ def upper_truss_positions(data: CanopyInput) -> list[float]:
     if data.upper_count < 2:
         return [0.0]
     return [i / (data.upper_count - 1) for i in range(data.upper_count)]
-

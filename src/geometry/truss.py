@@ -156,7 +156,7 @@ def validate_connectivity(model: StructuralModel) -> None:
     for column in model.columns:
         if column.top_node not in adjacency or column.base_node not in adjacency[column.top_node]:
             raise ValueError(f"Column {column.name} is not connected to the structural graph.")
-        if "lower_top" not in model.nodes[column.top_node].roles:
+        if not ({"lower_top", "lower_bottom"} & model.nodes[column.top_node].roles):
             raise ValueError(f"Column {column.name} top node is not a real lower truss node.")
 
     for roof_node_id in model.roof_node_ids:

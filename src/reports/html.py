@@ -30,7 +30,8 @@ S0={result.load_breakdown.s0_kpa:.3f} кН/м²,
 Sd={result.load_breakdown.sd_kpa:.3f} кН/м².</p>
 <h2>Итоги</h2>
 <p>Max Uz={result.max_uz_mm:.2f} мм, max |N|={result.max_abs_n_kn:.2f} кН,
-sum Rz={result.total_reaction_z_n / 1000:.2f} кН.</p>
+sum Rz={result.total_reaction_z_n / 1000:.2f} кН,
+собственный вес={result.load_breakdown.total_self_weight_kN:.2f} кН,
+полная вертикальная нагрузка={result.load_breakdown.total_applied_vertical_load_kN:.2f} кН.</p>
 </body></html>
 """
-
