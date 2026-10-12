@@ -23,7 +23,10 @@ def test_upper_chords_refine_but_webs_do_not_and_bearings_release_rotation():
     assert bearings
     for a, b in bearings:
         assert a != b
-        assert fine.nodes[a].coords == fine.nodes[b].coords
+        if fine.nodes[a].coords != fine.nodes[b].coords:
+            row = next(row for row in fine.lower_trusses.values() if a in row)
+            assert a in (row[0], row[-1])
+            assert not fine.nodes[row[0]].y < fine.nodes[b].y < fine.nodes[row[-1]].y
         assert fixed[b][4:] == (0, 0)  # No bending clamp or rigid crossing of chords.
 
 

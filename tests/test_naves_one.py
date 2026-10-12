@@ -15,6 +15,7 @@ from src.sections.database import section_database
 def test_naves_one_drawing_geometry_and_load_path():
     data = input_from_preset("naves_one")
     # Compare the original drawing dimensions, not the edited preset.
+    data.lower_chord_section = "60x60x3"
     data.lower_web_section = "40x60x2"
     data.column_section = "100x100x3"
     data.column_height_mm = None
@@ -33,7 +34,7 @@ def test_naves_one_drawing_geometry_and_load_path():
     assert not any(isclose(model.nodes[node_id].y, 2.659) for node_id in model.lower_trusses["B1"])
     assert len(model.lower_trusses) == 5
     assert len(model.upper_trusses) == 10
-    offset = 0.1 + section_database()[data.lower_chord_section].height / 2
+    offset = section_database()[data.lower_chord_section].height / 2 - data.lower_height_mm / 1000
     assert isclose(model.nodes[model.columns[0].top_node].z, 2.601 - offset, abs_tol=0.002)
     assert isclose(model.nodes[model.columns[4].top_node].z, 2.400 - offset, abs_tol=0.002)
     assert isclose(sum(model.roof_tributary_areas.values()), model.loaded_roof_area, abs_tol=1e-8)
@@ -41,7 +42,7 @@ def test_naves_one_drawing_geometry_and_load_path():
 
     # Compare with the drawing schedule minus K6 (23.42 kg).
     schedule_mass = (2882.91 - 23.42 + mass_breakdown(model)["crossbeams"]
-                     - 9 * offset * section_database()[data.column_section].mass_per_m)
+                     - 12 * offset * section_database()[data.column_section].mass_per_m)
     assert abs(mass_breakdown(model)["total"] - schedule_mass) / schedule_mass < 0.05
 
 
@@ -83,7 +84,7 @@ def test_naves_one_trapezoids_and_shared_support_nodes():
         for node_id in lower_top_ids:
             lower_top = model.nodes[node_id]
             if isclose(lower_top.y, tops[0].y, abs_tol=1e-8):
-                bearing = dict(model.bearing_links)[node_id]
+                bearing = next(b for a, b in model.bearing_links if a == node_id and b in bottom_ids)
                 assert bearing in bottom_ids
                 assert model.nodes[bearing].coords == lower_top.coords
 
@@ -108,8 +109,7 @@ def test_naves_one_bearing_elevations_with_editable_truss_heights(lower, start, 
         base = model.nodes[column.base_node]
         top = model.nodes[column.top_node]
         assert base.z == 0.0
-        offset = (0.1 + section_database()[data.lower_chord_section].height / 2
-                  if column.name == "K7" or column.name.endswith(("-front", "-rear")) else 0.0)
+        offset = section_database()[data.lower_chord_section].height / 2 - lower / 1000
         assert isclose(top.z - base.z, 2.7 - offset, abs_tol=1e-8)
     for row in model.upper_bottom_trusses.values():
         for node_id in row:

@@ -23,6 +23,15 @@ def element_mass(model: StructuralModel, element: Element, steel: SteelMaterial 
     return section.area * element_length(model, element) * material.rho
 
 
+def truss_masses(model: StructuralModel, steel: SteelMaterial | None = None) -> dict[str, float]:
+    """Mass of each truss's modelled members, excluding supplementary dead mass."""
+    result = dict.fromkeys((*model.lower_trusses, *model.upper_trusses), 0.0)
+    for element in model.elements:
+        if element.group in result and element.role.startswith(("lower", "upper")):
+            result[element.group] += element_mass(model, element, steel)
+    return result
+
+
 def mass_breakdown(model: StructuralModel, steel: SteelMaterial | None = None) -> dict[str, float]:
     result = {"lower": 0.0, "upper": 0.0, "columns": 0.0, "crossbeams": 0.0, "total": 0.0}
     for element in model.elements:

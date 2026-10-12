@@ -6,7 +6,7 @@ from src.loads.self_weight import mass_breakdown
 
 
 def test_whole_chord_override_preserves_geometry_and_changes_only_target_mass():
-    data = replace(input_from_preset('naves_one'), fem_subdivisions=4)
+    data = replace(input_from_preset('naves_one'), lower_chord_section='60x60x3', fem_subdivisions=4, member_section_overrides={})
     baseline = generate_naves_one(data)
     changed = generate_naves_one(replace(data,member_section_overrides={'B3 top chord':'60x60x4'}))
     assert baseline.nodes == changed.nodes
@@ -25,4 +25,4 @@ def test_whole_chord_override_preserves_geometry_and_changes_only_target_mass():
 ])
 def test_invalid_override_rejected(overrides,message):
     with pytest.raises(ValueError,match=message):
-        generate_naves_one(replace(input_from_preset('naves_one'),member_section_overrides=overrides))
+        generate_naves_one(replace(input_from_preset('naves_one'),lower_chord_section='60x60x3',member_section_overrides=overrides))

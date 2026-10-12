@@ -16,7 +16,7 @@ from src.geometry.canopy import CanopyPlan, roof_plane_from_input
 from src.geometry.columns import ORIGINAL_SUPPORTS_BY_TRUSS
 from src.geometry.naves_one import generate_naves_one, roof_area as naves_one_roof_area, upper_truss_dimensions
 from src.geometry.truss import generate_model
-from src.loads.self_weight import G_ACCEL, mass_breakdown
+from src.loads.self_weight import G_ACCEL, mass_breakdown, truss_masses
 from src.loads.snow_sp20 import kaluga_source, snow_design_pressure_kpa
 from src.models import BaseFixity, CanopyInput, SupportMode, WebType
 from src.optimization.cost import cost_breakdown
@@ -306,6 +306,7 @@ def naves_one_inputs(data: CanopyInput, sections: list[str]) -> CanopyInput:
         },
     )
     st.sidebar.subheader("Сечения")
+    preset_lower_chord = data.lower_chord_section
     for attr, label in (
         ("lower_chord_section", "Пояса ферм В"),
         ("lower_web_section", "Решётка ферм В"),
@@ -315,6 +316,22 @@ def naves_one_inputs(data: CanopyInput, sections: list[str]) -> CanopyInput:
     ):
         current = getattr(data, attr)
         setattr(data, attr, st.sidebar.selectbox(label, sections, sections.index(current)))
+    if data.lower_chord_section != preset_lower_chord:
+        removed = [label for label in data.member_section_overrides
+                   if label.startswith("B") and label.endswith(" chord")]
+        data.member_section_overrides = {
+            label: section for label, section in data.member_section_overrides.items()
+            if label not in removed
+        }
+        if removed:
+            st.sidebar.info(
+                f"Все пояса ферм B, включая B3: {data.lower_chord_section}. "
+                "Локальные замены поясов из пресета отключены для выбранного общего сечения."
+            )
+    if data.member_section_overrides:
+        st.sidebar.info("Локальные сечения имеют приоритет над общими: " + "; ".join(
+            f"{label} → {section}" for label, section in data.member_section_overrides.items()
+        ))
     st.sidebar.subheader("Нагрузки")
     data.roof_dead_load_kpa = st.sidebar.number_input("Полный вес кровли с основанием, кН/м²", 0.0, 5.0, data.roof_dead_load_kpa, 0.01)
     if data.roof_system == "MEMBRANE":
@@ -355,11 +372,27 @@ def geometry_summary(model, data: CanopyInput) -> None:
     else:
         st.caption(f"Original supports: {ORIGINAL_SUPPORTS_BY_TRUSS}")
     st.caption(f"Масса до расчёта: нижние {masses['lower']:.1f} кг, верхние {masses['upper']:.1f} кг, стойки {masses['columns']:.1f} кг, перекладины {masses['crossbeams']:.1f} кг.")
+    st.subheader("Вес каждой фермы")
+    weights = truss_masses(model)
+    rows = [
+        {"Ферма": name, "Тип": "Нижняя" if name in model.lower_trusses else "Верхняя", "Масса, кг": mass}
+        for name, mass in weights.items()
+    ]
+    rows.append({"Ферма": "Итого", "Тип": "Все фермы", "Масса, кг": sum(weights.values())})
+    st.dataframe(
+        pd.DataFrame(rows), hide_index=True, use_container_width=True,
+        height=(len(rows) + 1) * 35 + 3,
+        column_config={"Масса, кг": st.column_config.NumberColumn(format="%.1f")},
+    )
+    st.caption("Масса поясов и решётки рассчитана по длинам и сечениям элементов текущей модели. Стойки, перекладины и кровля в таблицу не входят.")
+    if model.additional_dead_mass_kg:
+        st.caption(f"Дополнительная масса связей: {model.additional_dead_mass_kg:.2f} кг — учтена в общей массе модели, но не распределена по отдельным фермам.")
 
 
 def show_results(data: CanopyInput, model, result) -> None:
-    st.error("Надёжность по снеговой нагрузке не подтверждена: полный набор проверок не выполнен.")
-    st.dataframe(result.checks, hide_index=True, use_container_width=True)
+    with st.expander("Статус проверок", expanded=False):
+        st.error("Надёжность по снеговой нагрузке не подтверждена: полный набор проверок не выполнен.")
+        st.dataframe(result.checks, hide_index=True, use_container_width=True)
     if not result.scenarios.empty:
         st.subheader("Отдельные снеговые сценарии")
         st.dataframe(result.scenarios, hide_index=True, use_container_width=True)

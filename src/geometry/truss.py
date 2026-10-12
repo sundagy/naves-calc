@@ -181,7 +181,8 @@ def validate_connectivity(model: StructuralModel) -> None:
         if column.top_node not in connected:
             raise ValueError(f"Column {column.name} is not connected to the structural graph.")
         if not ({"lower_top", "lower_bottom"} & model.nodes[column.top_node].roles) and not any(
-            constrained == column.top_node and "crossbeam" in model.nodes[retained].roles
+            constrained == column.top_node
+            and {"crossbeam", "lower_top", "lower_bottom"} & model.nodes[retained].roles
             for retained, constrained in model.bearing_links
         ):
             raise ValueError(f"Column {column.name} top node is not a real lower truss node.")

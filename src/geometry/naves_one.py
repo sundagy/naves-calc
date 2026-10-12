@@ -146,16 +146,32 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
     supports += [("K5", left_x(4.829), 4.829)]
     supports += [("K4-middle-1", WIDTH, 2.659), ("K4-middle-2", WIDTH, 4.829)]
 
+    sections = section_database()
+    column_section = sections[data.column_section]
+    web_section = sections[data.lower_web_section]
+    lower_limits: dict[int, tuple[float, float]] = {}
+
     # B1 follows the sloping left edge. B2-B5 are straight longitudinal trusses.
     for index, (front_x, end_y) in enumerate(zip(FRONT_XS, (LEFT_REAR_Y, *REAR_YS))):
         name = f"B{index + 1}"
         support_ys = [y for _, x, y in supports if (isclose(x, left_x(y), abs_tol=1e-7) if index == 0 else isclose(x, front_x, abs_tol=1e-7))]
         # Bearings split the chords only; neither columns nor F trusses alter the web.
-        plan_length = dist((front_x, 0.0), (left_x(end_y) if index == 0 else front_x, end_y))
+        original_length = dist((front_x, 0.0), (left_x(end_y) if index == 0 else front_x, end_y))
+        ux = (left_x(end_y) - front_x) / original_length if index == 0 else 0.0
+        uy = end_y / original_length
+        # End verticals touch the inward Y faces of the columns. Include the
+        # projected half-section of B1's rotated end vertical, not just its axis.
+        inset = column_section.height / 2 + (web_section.height * uy + web_section.width * abs(ux)) / 2
+        start_y, stop_y = round(inset, 8), round(end_y - inset, 8)
+        if start_y >= stop_y:
+            raise ValueError("Недостаточный пролёт B между гранями стоек.")
+        lower_limits[index] = (start_y, stop_y)
+        plan_length = (stop_y - start_y) / uy
         panel_count = max(1, ceil(plan_length / max(data.lower_target_panel_length, 0.1)))
-        web_ys = [round(end_y * i / panel_count, 8) for i in range(panel_count + 1)]
-        top_ys = sorted(set(web_ys) | {round(y, 8) for y in UPPER_YS if y <= end_y})
-        bottom_ys = sorted(set(web_ys) | {round(y, 8) for y in support_ys})
+        web_ys = [round(start_y + (stop_y - start_y) * i / panel_count, 8) for i in range(panel_count + 1)]
+        top_ys = sorted(set(web_ys) | {round(y, 8) for y in UPPER_YS if start_y < y < stop_y}
+                        | {round(y, 8) for y in support_ys if start_y < y < stop_y})
+        bottom_ys = sorted(set(web_ys) | {round(y, 8) for y in support_ys if start_y < y < stop_y})
         top_nodes: list[int] = []
         bottom_nodes: list[int] = []
         for y in top_ys:
@@ -197,8 +213,11 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
             else:
                 # Transfer vertical load without rigidly joining the rotations
                 # of orthogonal continuous chords or inheriting a lower-web clamp.
-                retained = lower_top_at[(match, round(y, 8))]
-                bearing = nodes.independent(*nodes.nodes[retained].coords,
+                start_y, stop_y = lower_limits[match]
+                retained = lower_top_at[(match, round(min(max(y, start_y), stop_y), 8))]
+                bearing_coords = (nodes.nodes[retained].coords if start_y <= y <= stop_y
+                                  else (x, y, top_z - upper_height_at(data, x, y)))
+                bearing = nodes.independent(*bearing_coords,
                                             f"{name}-bearing-{x:.3f}", "upper_bottom")
                 bottom_nodes.append(bearing)
                 bearing_links.append((retained, bearing))
@@ -221,27 +240,56 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
     columns: list[Column] = []
     support_node_ids: list[int] = []
     beam_rows: dict[str, list[int]] = {"front": [], "rear": []}
-    sections = section_database()
     beam_height = sections[CROSSBEAM_SECTION].height
     lower_half_height = sections[data.lower_chord_section].height / 2.0
     for name, x, y in supports:
-        match = next(i for i in range(5) if (isclose(x, left_x(y), abs_tol=1e-7) if i == 0 else isclose(x, FRONT_XS[i], abs_tol=1e-7)) and y <= (LEFT_REAR_Y, *REAR_YS)[i] + 1e-8)
-        top_id = lower_bottom_at[(match, round(y, 8))]
+        matches = [i for i in range(5) if (isclose(x, left_x(y), abs_tol=1e-7) if i == 0 else isclose(x, FRONT_XS[i], abs_tol=1e-7)) and y <= (LEFT_REAR_Y, *REAR_YS)[i] + 1e-8]
+        match = matches[0]
+        start_y, stop_y = lower_limits[match]
+        bearing_y = round(min(max(y, start_y), stop_y), 8)
+        bottom_id = lower_bottom_at[(match, bearing_y)]
+        upper_id = lower_top_at[(match, bearing_y)]
+        column_chord_z = roof.z(x, y) - upper_height_at(data, x, y)
+        column_bottom_id = nodes.get(x, y, column_chord_z - lower_height,
+                                     f"{name}-lower-joint", "column_joint")
+        # Columns continue alongside B up to the underside of its upper chord.
+        # The two chord connections represent the welded side attachment.
+        top_z = column_chord_z - lower_half_height
+        if top_z <= nodes.nodes[bottom_id].z:
+            raise ValueError("Высота фермы B недостаточна для бокового соединения со стойкой.")
+        top_id = nodes.get(x, y, top_z, f"{name}-top", "column_top")
+        bearing_links.append((upper_id, top_id))
+        base_id = nodes.get(x, y, 0.0, f"{name}-base", "support")
+        column_nodes = [base_id]
         row = "front" if name in FRONT_COLUMN_NAMES else "rear" if name in REAR_COLUMN_NAMES else None
         if row is not None:
-            truss_id = top_id
-            truss_z = nodes.nodes[truss_id].z
-            beam_id = nodes.get(x, y, truss_z - lower_half_height - beam_height / 2.0,
+            truss_node = nodes.nodes[bottom_id]
+            truss_z = truss_node.z
+            beam_z = truss_z - lower_half_height - beam_height / 2.0
+            beam_id = nodes.get(truss_node.x, truss_node.y, beam_z,
                                 f"{row}-{name}-axis", "crossbeam")
-            top_z = truss_z - lower_half_height - beam_height
-            if top_z <= 0:
+            if truss_z - lower_half_height - beam_height <= 0:
                 raise ValueError("Недостаточная высота стойки для установки перекладины.")
-            top_id = nodes.get(x, y, top_z, f"{name}-top", "column_top")
+            # Angle seats connect the crossbeam to the continuous column;
+            # B's lower chord still rests on the crossbeam's upper surface.
             beam_rows[row].append(beam_id)
-            bearing_links.extend([(beam_id, top_id), (beam_id, truss_id)])
-        nodes.nodes[top_id].roles.add("column_top")
-        base_id = nodes.get(x, y, 0.0, f"{name}-base", "support")
-        elements.add(base_id, top_id, "column", name, data.column_section, name)
+            # Keep the column vertical: its angle-seat joint remains on the
+            # column axis while the crossbeam moves under the shortened B end.
+            seat_id = nodes.get(x, y, beam_z, f"{name}-angle-seat", "column_joint")
+            column_nodes.append(seat_id)
+            bearing_links.extend([(beam_id, seat_id), (beam_id, bottom_id)])
+            # B1 and B2 meet the same rear column. Shortening separates their
+            # former shared nodes, so both end frames need explicit joints.
+            for other in matches[1:]:
+                lo, hi = lower_limits[other]
+                station = round(min(max(y, lo), hi), 8)
+                other_top = lower_top_at[(other, station)]
+                other_bottom = lower_bottom_at[(other, station)]
+                bearing_links = [(upper_id if a == other_top else a, b) for a, b in bearing_links]
+                bearing_links.extend([(upper_id, other_top), (beam_id, other_bottom)])
+        column_nodes.extend([column_bottom_id, top_id])
+        for a, b in zip(column_nodes, column_nodes[1:]):
+            elements.add(a, b, "column", name, data.column_section, name)
         columns.append(Column(name, x, y, base_id, top_id))
         support_node_ids.append(base_id)
 
@@ -260,7 +308,11 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
         warnings=[
             "Изменённая схема: 12 стоек, K6 на оси 1–Б исключена из исходного чертежа.",
             "Перекладины front (включая K7) и rear: 100×100×3 мм. "
-            f"Отметки ферм сохранены; стойки под перекладинами укорочены на {(beam_height + lower_half_height) * 1000:g} мм.",
+            f"Стойки front/rear удлинены на {(lower_height + beam_height) * 1000:g} мм "
+            "до нижней поверхности верхнего пояса B; промежуточные стойки доведены до того же пояса. "
+            "Перекладины смещены внутрь навеса под торцы B и закреплены на уголках сбоку стоек; фермы B опираются на перекладины "
+            "и приварены боковинами к стойкам. Торцы B укорочены до внутренних граней стоек с учётом сечения торцевых вертикалей. "
+            "Смещения осей соединены расчётными связями. Уголки и швы отдельно не моделируются.",
             f"Нижние фермы В: {data.lower_height_mm:g} мм; верхние Ф: "
             f"F1 — {upper_start_height * 1000:g} → {upper_end_height * 1000:g} мм; "
             f"F2–F10 — от {upper_start_height * 1000:g} мм со стороны K5 с тем же уклоном поясов, что у F1. "

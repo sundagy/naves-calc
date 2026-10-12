@@ -21,7 +21,8 @@ def test_lower_web_does_not_change_when_upper_trusses_move(monkeypatch, web_type
     moved = naves_one.generate_naves_one(data)
     assert web_geometry(moved) == web_geometry(original)
     # Every F/B intersection transfers vertical displacement through a bearing.
-    bearings = dict(moved.bearing_links)
+    bearings = {a: b for a, b in moved.bearing_links
+                if "upper_bottom" in moved.nodes[b].roles}
     lower_tops = {node for row in moved.lower_trusses.values() for node in row}
     web_nodes = {node for e in moved.elements if e.role == "lower_web" for node in (e.i, e.j)}
     off_panel = set()
@@ -52,7 +53,7 @@ def test_lower_web_responds_to_its_own_panel_length():
 
 
 @pytest.mark.parametrize("step", [0.5, 1.0, 1.5])
-def test_lower_web_is_uniform_and_columns_only_split_bottom_chord(step):
+def test_lower_web_is_uniform_and_columns_split_both_chords(step):
     data = input_from_preset("naves_one")
     data.lower_target_panel_length = step
     model = naves_one.generate_naves_one(data)
@@ -63,15 +64,20 @@ def test_lower_web_is_uniform_and_columns_only_split_bottom_chord(step):
         count = ceil(length / step)
         stations = sorted({model.nodes[n].y for e in model.elements
                            if e.role == "lower_web" and e.group == group for n in (e.i, e.j)})
-        assert stations == [round(last.y * i / count, 8) for i in range(count + 1)]
+        assert stations == [round(first.y + (last.y - first.y) * i / count, 8) for i in range(count + 1)]
     for column in model.columns:
         if column.name not in ("K5", "K4-middle-1", "K4-middle-2"):
             continue
-        assert column.top_node not in web_nodes
-        chords = [e for e in model.elements if e.role == "lower_chord"
-                  and column.top_node in (e.i, e.j)]
-        assert len(chords) == 2
-        assert all(e.is_beam and "bottom chord" in e.label for e in chords)
+        top_bearing = next(a for a, b in model.bearing_links if b == column.top_node)
+        bottom_bearing = next(n.id for n in model.nodes.values()
+                              if "lower_bottom" in n.roles
+                              and (n.x, n.y) == (column.x, column.y))
+        for bearing, label in ((top_bearing, "top chord"), (bottom_bearing, "bottom chord")):
+            assert bearing not in web_nodes
+            chords = [e for e in model.elements if e.role == "lower_chord"
+                      and bearing in (e.i, e.j)]
+            assert len(chords) == 2
+            assert all(e.is_beam and label in e.label for e in chords)
     result = solve_model(data, model)
     assert result.ok
     assert result.load_breakdown.sum_vertical_reactions_kN == pytest.approx(

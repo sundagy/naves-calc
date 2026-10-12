@@ -39,3 +39,29 @@ def test_realistic_view_includes_every_member_and_hover_labels():
     assert "Стойка K5<br>120x120x3 мм" in mesh.hovertext
     assert "Ферма F10<br>60x60x3 мм" in mesh.hovertext
     assert mesh.flatshading
+
+
+@pytest.mark.parametrize("column_section", ["100x100x3", "120x120x3"])
+def test_b_end_vertical_surfaces_touch_column_faces(column_section):
+    data = input_from_preset("naves_one")
+    data.column_section = column_section
+    model = generate_naves_one(data)
+    column_depth = parse_rhs(column_section).height
+    for group, row in model.lower_trusses.items():
+        first, last = model.nodes[row[0]], model.nodes[row[-1]]
+        width_axis = (-(last.y - first.y), last.x - first.x, 0.0)
+        for endpoint, front in ((first, True), (last, False)):
+            vertical = next(e for e in model.elements
+                            if e.group == group and e.role == "lower_web"
+                            and endpoint.id in (e.i, e.j)
+                            and model.nodes[e.i].y == model.nodes[e.j].y)
+            bottom = vertical.j if vertical.i == endpoint.id else vertical.i
+            assert any(b == bottom and "crossbeam" in model.nodes[a].roles
+                       for a, b in model.bearing_links)
+            points, _ = _rhs_mesh(model.nodes[vertical.i].coords, model.nodes[vertical.j].coords,
+                                  parse_rhs(vertical.section), width_axis)
+            column = min(model.columns, key=lambda c: np.hypot(c.x - endpoint.x, c.y - endpoint.y))
+            face_y = column.y + (column_depth / 2 if front else -column_depth / 2)
+            outer_y = points[:, 1].min() if front else points[:, 1].max()
+            assert outer_y == pytest.approx(face_y, abs=1e-8)
+        assert all(model.nodes[a].y < model.nodes[b].y for a, b in zip(row, row[1:]))

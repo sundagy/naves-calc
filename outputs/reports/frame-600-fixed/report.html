@@ -1,0 +1,1113 @@
+<!doctype html><html lang="ru"><meta charset="utf-8"><title>Три проверки навеса</title>
+<style>body{font:16px system-ui;max-width:1300px;margin:40px auto;padding:0 24px;color:#17202a}table{border-collapse:collapse;font-size:13px;display:block;overflow:auto}th,td{padding:8px;border:1px solid #ccd4dc;text-align:left}h2{margin-top:36px}.alert{padding:20px;background:#fff0e8;border-left:5px solid #a30}pre{white-space:pre-wrap}</style>
+<h1>Проверка доступной пространственной модели</h1>
+<p class="alert"><b>Пригодность к строительству не подтверждена.</b> Это частичная проверка модели, не полный расчёт по СП. Проверен вариант из приложенного input.json; параметры и ограничения приведены ниже.</p>
+<h2>1. Прочность и устойчивость</h2><p>Проверены упругие нормальные напряжения от N, My, Mz. Значение выше 1 — превышение в принятой модели. Срез, кручение, местная и общая устойчивость, взаимодействие сжатия и изгиба по СП 16, второй порядок и соединения не проверены. Половинные загружения — исследовательские, не замена нормативным схемам. Коэффициенты постоянных нагрузок здесь не назначены: это существующие нагрузки модели, не полный набор расчётных сочетаний; ветер отсутствует.</p><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>case</th>
+      <th>min_Uz_mm</th>
+      <th>max_N_kN</th>
+      <th>max_Rz_kN</th>
+      <th>axial_util</th>
+      <th>NM_util</th>
+      <th>worst_member</th>
+      <th>normal_stress_status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Равномерный снег; снег γf=1.4</td>
+      <td>-19.711</td>
+      <td>116.637</td>
+      <td>44.783</td>
+      <td>0.515</td>
+      <td>0.699</td>
+      <td>B3 top chord</td>
+      <td>PARTIAL_ONLY</td>
+    </tr>
+    <tr>
+      <td>Снег на левой половине (X); снег γf=1.4</td>
+      <td>-11.054</td>
+      <td>64.071</td>
+      <td>44.359</td>
+      <td>0.283</td>
+      <td>0.385</td>
+      <td>B3 top chord</td>
+      <td>PARTIAL_ONLY</td>
+    </tr>
+    <tr>
+      <td>Снег на правой половине (X); снег γf=1.4</td>
+      <td>-13.502</td>
+      <td>86.196</td>
+      <td>35.011</td>
+      <td>0.381</td>
+      <td>0.497</td>
+      <td>B4 top chord</td>
+      <td>PARTIAL_ONLY</td>
+    </tr>
+    <tr>
+      <td>Снег на передней половине (Y); снег γf=1.4</td>
+      <td>-13.483</td>
+      <td>86.003</td>
+      <td>34.206</td>
+      <td>0.380</td>
+      <td>0.521</td>
+      <td>B3 top chord</td>
+      <td>PARTIAL_ONLY</td>
+    </tr>
+    <tr>
+      <td>Снег на задней половине (Y); снег γf=1.4</td>
+      <td>-9.447</td>
+      <td>61.874</td>
+      <td>29.651</td>
+      <td>0.273</td>
+      <td>0.423</td>
+      <td>B3 bottom chord</td>
+      <td>PARTIAL_ONLY</td>
+    </tr>
+    <tr>
+      <td>Равномерный снег; снег γf=1</td>
+      <td>-14.844</td>
+      <td>87.870</td>
+      <td>34.402</td>
+      <td>0.388</td>
+      <td>0.526</td>
+      <td>B3 top chord</td>
+      <td>PARTIAL_ONLY</td>
+    </tr>
+    <tr>
+      <td>Снег на левой половине (X); снег γf=1</td>
+      <td>-8.605</td>
+      <td>50.321</td>
+      <td>34.099</td>
+      <td>0.222</td>
+      <td>0.302</td>
+      <td>B3 top chord</td>
+      <td>PARTIAL_ONLY</td>
+    </tr>
+    <tr>
+      <td>Снег на правой половине (X); снег γf=1</td>
+      <td>-10.377</td>
+      <td>65.800</td>
+      <td>26.842</td>
+      <td>0.291</td>
+      <td>0.379</td>
+      <td>B4 top chord</td>
+      <td>PARTIAL_ONLY</td>
+    </tr>
+    <tr>
+      <td>Снег на передней половине (Y); снег γf=1</td>
+      <td>-10.395</td>
+      <td>65.625</td>
+      <td>26.142</td>
+      <td>0.290</td>
+      <td>0.395</td>
+      <td>B3 top chord</td>
+      <td>PARTIAL_ONLY</td>
+    </tr>
+    <tr>
+      <td>Снег на задней половине (Y); снег γf=1</td>
+      <td>-7.490</td>
+      <td>48.042</td>
+      <td>23.014</td>
+      <td>0.212</td>
+      <td>0.328</td>
+      <td>B3 bottom chord</td>
+      <td>PARTIAL_ONLY</td>
+    </tr>
+  </tbody>
+</table><h3>Критические элементы</h3><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>element</th>
+      <th>i</th>
+      <th>j</th>
+      <th>role</th>
+      <th>formulation</th>
+      <th>group</th>
+      <th>label</th>
+      <th>section</th>
+      <th>length_m</th>
+      <th>mass_kg</th>
+      <th>N_kN</th>
+      <th>stress_MPa</th>
+      <th>utilization</th>
+      <th>My_max_kNm</th>
+      <th>Mz_max_kNm</th>
+      <th>elastic_NM_util</th>
+      <th>effective_length_m</th>
+      <th>Euler_Ncr_kN</th>
+      <th>Euler_ratio</th>
+      <th>case</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1357</td>
+      <td>846</td>
+      <td>72</td>
+      <td>lower_chord</td>
+      <td>beam</td>
+      <td>B3</td>
+      <td>B3 top chord</td>
+      <td>80x80x3</td>
+      <td>0.038194</td>
+      <td>0.277040</td>
+      <td>-116.615384</td>
+      <td>-126.207125</td>
+      <td>0.515131</td>
+      <td>0.005841</td>
+      <td>1.026206</td>
+      <td>0.699392</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>111</td>
+      <td>72</td>
+      <td>847</td>
+      <td>lower_chord</td>
+      <td>beam</td>
+      <td>B3</td>
+      <td>B3 top chord</td>
+      <td>80x80x3</td>
+      <td>0.204167</td>
+      <td>1.480903</td>
+      <td>-116.611519</td>
+      <td>-126.202942</td>
+      <td>0.515114</td>
+      <td>0.009706</td>
+      <td>1.020017</td>
+      <td>0.698282</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>1351</td>
+      <td>840</td>
+      <td>70</td>
+      <td>lower_chord</td>
+      <td>beam</td>
+      <td>B3</td>
+      <td>B3 top chord</td>
+      <td>80x80x3</td>
+      <td>0.030556</td>
+      <td>0.221632</td>
+      <td>-116.631499</td>
+      <td>-126.224566</td>
+      <td>0.515202</td>
+      <td>0.023408</td>
+      <td>0.834132</td>
+      <td>0.668307</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>1408</td>
+      <td>897</td>
+      <td>90</td>
+      <td>lower_chord</td>
+      <td>beam</td>
+      <td>B3</td>
+      <td>B3 bottom chord</td>
+      <td>80x80x3</td>
+      <td>0.242361</td>
+      <td>1.757942</td>
+      <td>33.896332</td>
+      <td>36.684342</td>
+      <td>0.149732</td>
+      <td>0.228976</td>
+      <td>2.659874</td>
+      <td>0.665504</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>109</td>
+      <td>70</td>
+      <td>841</td>
+      <td>lower_chord</td>
+      <td>beam</td>
+      <td>B3</td>
+      <td>B3 top chord</td>
+      <td>80x80x3</td>
+      <td>0.211806</td>
+      <td>1.536310</td>
+      <td>-116.636903</td>
+      <td>-126.230414</td>
+      <td>0.515226</td>
+      <td>0.005586</td>
+      <td>0.778199</td>
+      <td>0.654796</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>1356</td>
+      <td>845</td>
+      <td>846</td>
+      <td>lower_chord</td>
+      <td>beam</td>
+      <td>B3</td>
+      <td>B3 top chord</td>
+      <td>80x80x3</td>
+      <td>0.038194</td>
+      <td>0.277040</td>
+      <td>-116.615384</td>
+      <td>-126.207125</td>
+      <td>0.515131</td>
+      <td>0.004982</td>
+      <td>0.765533</td>
+      <td>0.652698</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>1358</td>
+      <td>847</td>
+      <td>848</td>
+      <td>lower_chord</td>
+      <td>beam</td>
+      <td>B3</td>
+      <td>B3 top chord</td>
+      <td>80x80x3</td>
+      <td>0.204167</td>
+      <td>1.480903</td>
+      <td>-116.611519</td>
+      <td>-126.202942</td>
+      <td>0.515114</td>
+      <td>0.025319</td>
+      <td>0.714127</td>
+      <td>0.644346</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>157</td>
+      <td>101</td>
+      <td>928</td>
+      <td>lower_chord</td>
+      <td>beam</td>
+      <td>B4</td>
+      <td>B4 top chord</td>
+      <td>80x80x3</td>
+      <td>0.227125</td>
+      <td>1.647428</td>
+      <td>-107.602934</td>
+      <td>-116.453392</td>
+      <td>0.475320</td>
+      <td>0.030147</td>
+      <td>0.876758</td>
+      <td>0.637238</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>119</td>
+      <td>81</td>
+      <td>871</td>
+      <td>lower_chord</td>
+      <td>beam</td>
+      <td>B3</td>
+      <td>B3 bottom chord</td>
+      <td>80x80x3</td>
+      <td>0.242361</td>
+      <td>1.757942</td>
+      <td>-5.329792</td>
+      <td>-5.768173</td>
+      <td>0.023544</td>
+      <td>0.206334</td>
+      <td>3.230558</td>
+      <td>0.637163</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>128</td>
+      <td>62</td>
+      <td>81</td>
+      <td>lower_web</td>
+      <td>beam</td>
+      <td>B3</td>
+      <td>B3 vertical 1</td>
+      <td>60x60x3</td>
+      <td>0.600000</td>
+      <td>3.221640</td>
+      <td>-33.320378</td>
+      <td>-48.714002</td>
+      <td>0.198833</td>
+      <td>0.040948</td>
+      <td>1.300023</td>
+      <td>0.632282</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>1357</td>
+      <td>846</td>
+      <td>72</td>
+      <td>lower_chord</td>
+      <td>beam</td>
+      <td>B3</td>
+      <td>B3 top chord</td>
+      <td>80x80x3</td>
+      <td>0.038194</td>
+      <td>0.277040</td>
+      <td>-87.853150</td>
+      <td>-95.079167</td>
+      <td>0.388078</td>
+      <td>0.004119</td>
+      <td>0.769572</td>
+      <td>0.526212</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Равномерный снег; снег γf=1</td>
+    </tr>
+    <tr>
+      <td>111</td>
+      <td>72</td>
+      <td>847</td>
+      <td>lower_chord</td>
+      <td>beam</td>
+      <td>B3</td>
+      <td>B3 top chord</td>
+      <td>80x80x3</td>
+      <td>0.204167</td>
+      <td>1.480903</td>
+      <td>-87.850217</td>
+      <td>-95.075993</td>
+      <td>0.388065</td>
+      <td>0.007056</td>
+      <td>0.764947</td>
+      <td>0.525494</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Равномерный снег; снег γf=1</td>
+    </tr>
+    <tr>
+      <td>1345</td>
+      <td>834</td>
+      <td>68</td>
+      <td>lower_chord</td>
+      <td>beam</td>
+      <td>B3</td>
+      <td>B3 top chord</td>
+      <td>80x80x3</td>
+      <td>0.022917</td>
+      <td>0.166224</td>
+      <td>-86.003462</td>
+      <td>-93.077340</td>
+      <td>0.379908</td>
+      <td>0.025721</td>
+      <td>0.761942</td>
+      <td>0.520536</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Снег на передней половине (Y); снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>107</td>
+      <td>68</td>
+      <td>835</td>
+      <td>lower_chord</td>
+      <td>beam</td>
+      <td>B3</td>
+      <td>B3 top chord</td>
+      <td>80x80x3</td>
+      <td>0.219444</td>
+      <td>1.591718</td>
+      <td>-85.989963</td>
+      <td>-93.062731</td>
+      <td>0.379848</td>
+      <td>0.009351</td>
+      <td>0.700157</td>
+      <td>0.506514</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Снег на передней половине (Y); снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>1351</td>
+      <td>840</td>
+      <td>70</td>
+      <td>lower_chord</td>
+      <td>beam</td>
+      <td>B3</td>
+      <td>B3 top chord</td>
+      <td>80x80x3</td>
+      <td>0.030556</td>
+      <td>0.221632</td>
+      <td>-87.866235</td>
+      <td>-95.093327</td>
+      <td>0.388136</td>
+      <td>0.017719</td>
+      <td>0.625182</td>
+      <td>0.502919</td>
+      <td>None</td>
+      <td>None</td>
+      <td>None</td>
+      <td>Равномерный снег; снег γf=1</td>
+    </tr>
+  </tbody>
+</table><h3>Индикатор устойчивости: предельная расчётная длина по Эйлеру</h3><p>Euler_Lcrit_weak_m — длина, при которой идеальная шарнирная колонна по слабой оси теряет устойчивость при данном сжатии. Это не допустимая длина по СП. Реальная расчётная длина неизвестна; длина конечного элемента не используется вместо неё. Наличие изгиба и несовершенств требует отдельной проверки. Для поясов берётся наибольшее сжатие группы, а не сумма сил.</p><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>group</th>
+      <th>label</th>
+      <th>section</th>
+      <th>compression_kN</th>
+      <th>Euler_Lcrit_weak_m</th>
+      <th>status</th>
+      <th>case</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>B3</td>
+      <td>B3 top chord</td>
+      <td>80x80x3</td>
+      <td>116.637</td>
+      <td>3.934</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>B3</td>
+      <td>B3 WARREN diagonal</td>
+      <td>60x60x3</td>
+      <td>46.387</td>
+      <td>3.976</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>F6</td>
+      <td>F6 WARREN diagonal</td>
+      <td>40x40x3</td>
+      <td>12.038</td>
+      <td>4.089</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Снег на левой половине (X); снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>B4</td>
+      <td>B4 top chord</td>
+      <td>80x80x3</td>
+      <td>107.773</td>
+      <td>4.093</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>F7</td>
+      <td>F7 WARREN diagonal</td>
+      <td>40x40x3</td>
+      <td>11.889</td>
+      <td>4.115</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>B4</td>
+      <td>B4 WARREN diagonal</td>
+      <td>60x60x3</td>
+      <td>43.224</td>
+      <td>4.118</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>F7</td>
+      <td>F7 WARREN diagonal</td>
+      <td>40x40x3</td>
+      <td>11.678</td>
+      <td>4.152</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Снег на левой половине (X); снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>F8</td>
+      <td>F8 WARREN diagonal</td>
+      <td>40x40x3</td>
+      <td>11.534</td>
+      <td>4.178</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>F6</td>
+      <td>F6 WARREN diagonal</td>
+      <td>40x40x3</td>
+      <td>11.393</td>
+      <td>4.203</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>B1</td>
+      <td>B1 WARREN diagonal</td>
+      <td>60x60x3</td>
+      <td>38.634</td>
+      <td>4.356</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>B4</td>
+      <td>B4 vertical 9</td>
+      <td>60x60x3</td>
+      <td>37.995</td>
+      <td>4.393</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>B3</td>
+      <td>B3 WARREN diagonal</td>
+      <td>60x60x3</td>
+      <td>37.238</td>
+      <td>4.437</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Снег на задней половине (Y); снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>B3</td>
+      <td>B3 top chord</td>
+      <td>80x80x3</td>
+      <td>87.870</td>
+      <td>4.532</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Равномерный снег; снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B3</td>
+      <td>B3 WARREN diagonal</td>
+      <td>60x60x3</td>
+      <td>35.264</td>
+      <td>4.560</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Снег на передней половине (Y); снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>B3</td>
+      <td>B3 WARREN diagonal</td>
+      <td>60x60x3</td>
+      <td>34.974</td>
+      <td>4.578</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Равномерный снег; снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B3</td>
+      <td>B3 top chord</td>
+      <td>80x80x3</td>
+      <td>86.003</td>
+      <td>4.581</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Снег на передней половине (Y); снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>B1</td>
+      <td>B1 WARREN diagonal</td>
+      <td>60x60x3</td>
+      <td>34.877</td>
+      <td>4.585</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Снег на левой половине (X); снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>F4</td>
+      <td>F4 WARREN diagonal</td>
+      <td>40x40x3</td>
+      <td>9.487</td>
+      <td>4.606</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Снег на правой половине (X); снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>F6</td>
+      <td>F6 top chord</td>
+      <td>60x60x3</td>
+      <td>34.304</td>
+      <td>4.623</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Равномерный снег; снег γf=1.4</td>
+    </tr>
+    <tr>
+      <td>F8</td>
+      <td>F8 WARREN diagonal</td>
+      <td>40x40x3</td>
+      <td>9.395</td>
+      <td>4.629</td>
+      <td>EFFECTIVE_LENGTH_AND_SP16_CHECK_REQUIRED</td>
+      <td>Снег на левой половине (X); снег γf=1.4</td>
+    </tr>
+  </tbody>
+</table><h2>2. Прогибы и водоотвод</h2><p>Ниже реакции на постоянный вес и полный нормативный снег γf=1, включая исследовательские половинные схемы. Это не автоматический выбор эксплуатационного сочетания по виду требования. Прогиб нижнего пояса измерен относительно прямой между переместившимися опорами каждого пролёта. Консоли и прогиб основания мембраны не проверены. L_over_f — измеренное отношение, не назначенный предел. Предельные прогибы и соответствующие сочетания ещё требуется установить.</p><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>group</th>
+      <th>support_i</th>
+      <th>support_j</th>
+      <th>L_m</th>
+      <th>node</th>
+      <th>relative_Uz_mm</th>
+      <th>max_abs_relative_mm</th>
+      <th>L_over_f</th>
+      <th>status</th>
+      <th>case</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>B3</td>
+      <td>81</td>
+      <td>90</td>
+      <td>8.725</td>
+      <td>884</td>
+      <td>-14.280</td>
+      <td>14.280</td>
+      <td>610.992</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Равномерный снег; снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B4</td>
+      <td>108</td>
+      <td>116</td>
+      <td>7.878</td>
+      <td>112</td>
+      <td>-11.508</td>
+      <td>11.508</td>
+      <td>684.562</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Равномерный снег; снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B3</td>
+      <td>81</td>
+      <td>90</td>
+      <td>8.725</td>
+      <td>85</td>
+      <td>-9.876</td>
+      <td>9.876</td>
+      <td>883.454</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Снег на передней половине (Y); снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B4</td>
+      <td>108</td>
+      <td>116</td>
+      <td>7.878</td>
+      <td>112</td>
+      <td>-9.209</td>
+      <td>9.209</td>
+      <td>855.504</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Снег на правой половине (X); снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B3</td>
+      <td>81</td>
+      <td>90</td>
+      <td>8.725</td>
+      <td>884</td>
+      <td>-8.695</td>
+      <td>8.695</td>
+      <td>1003.407</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Снег на правой половине (X); снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B4</td>
+      <td>108</td>
+      <td>116</td>
+      <td>7.878</td>
+      <td>957</td>
+      <td>-8.179</td>
+      <td>8.179</td>
+      <td>963.147</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Снег на передней половине (Y); снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B3</td>
+      <td>81</td>
+      <td>90</td>
+      <td>8.725</td>
+      <td>884</td>
+      <td>-8.172</td>
+      <td>8.172</td>
+      <td>1067.699</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Снег на левой половине (X); снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B3</td>
+      <td>81</td>
+      <td>90</td>
+      <td>8.725</td>
+      <td>86</td>
+      <td>-7.222</td>
+      <td>7.222</td>
+      <td>1208.083</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Снег на задней половине (Y); снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B2</td>
+      <td>52</td>
+      <td>32</td>
+      <td>9.659</td>
+      <td>56</td>
+      <td>-6.496</td>
+      <td>6.496</td>
+      <td>1486.956</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Равномерный снег; снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B4</td>
+      <td>108</td>
+      <td>116</td>
+      <td>7.878</td>
+      <td>959</td>
+      <td>-5.514</td>
+      <td>5.514</td>
+      <td>1428.736</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Снег на задней половине (Y); снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B2</td>
+      <td>52</td>
+      <td>32</td>
+      <td>9.659</td>
+      <td>56</td>
+      <td>-4.876</td>
+      <td>4.876</td>
+      <td>1980.914</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Снег на левой половине (X); снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B2</td>
+      <td>52</td>
+      <td>32</td>
+      <td>9.659</td>
+      <td>797</td>
+      <td>-4.719</td>
+      <td>4.719</td>
+      <td>2046.638</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Снег на передней половине (Y); снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B4</td>
+      <td>108</td>
+      <td>116</td>
+      <td>7.878</td>
+      <td>112</td>
+      <td>-4.360</td>
+      <td>4.360</td>
+      <td>1806.785</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Снег на левой половине (X); снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B2</td>
+      <td>52</td>
+      <td>32</td>
+      <td>9.659</td>
+      <td>802</td>
+      <td>-3.234</td>
+      <td>3.234</td>
+      <td>2986.503</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Снег на задней половине (Y); снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B2</td>
+      <td>52</td>
+      <td>32</td>
+      <td>9.659</td>
+      <td>799</td>
+      <td>-2.839</td>
+      <td>2.839</td>
+      <td>3402.088</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Снег на правой половине (X); снег γf=1</td>
+    </tr>
+    <tr>
+      <td>B1</td>
+      <td>26</td>
+      <td>32</td>
+      <td>5.000</td>
+      <td>723</td>
+      <td>-1.832</td>
+      <td>1.832</td>
+      <td>2729.722</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Равномерный снег; снег γf=1</td>
+    </tr>
+    <tr>
+      <td>F6</td>
+      <td>415</td>
+      <td>429</td>
+      <td>3.412</td>
+      <td>1893</td>
+      <td>-1.705</td>
+      <td>1.705</td>
+      <td>2000.776</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Равномерный снег; снег γf=1</td>
+    </tr>
+    <tr>
+      <td>F6</td>
+      <td>415</td>
+      <td>429</td>
+      <td>3.412</td>
+      <td>1892</td>
+      <td>-1.626</td>
+      <td>1.626</td>
+      <td>2098.218</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Снег на левой половине (X); снег γf=1</td>
+    </tr>
+    <tr>
+      <td>F7</td>
+      <td>463</td>
+      <td>477</td>
+      <td>3.412</td>
+      <td>2031</td>
+      <td>-1.581</td>
+      <td>1.581</td>
+      <td>2158.507</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Равномерный снег; снег γf=1</td>
+    </tr>
+    <tr>
+      <td>F5</td>
+      <td>367</td>
+      <td>381</td>
+      <td>3.412</td>
+      <td>1755</td>
+      <td>-1.520</td>
+      <td>1.520</td>
+      <td>2244.726</td>
+      <td>LIMIT_AND_SERVICE_COMBINATION_NOT_ASSIGNED</td>
+      <td>Равномерный снег; снег γf=1</td>
+    </tr>
+  </tbody>
+</table><p>Уклон вычислен по треугольной интерполяции деформированных верхних поясов в исходном направлении стока. Контрольный ориентир 0,5% взят из СП 20 п.15.1.4; требования конкретной мембранной системы проверяются отдельно. Положительный уклон интерполированной поверхности не доказывает отсутствие луж: основание между фермами, водостоки, швы и монтажные отклонения отсутствуют в модели.</p><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>case</th>
+      <th>min_slope_percent</th>
+      <th>below_threshold</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Равномерный снег; снег γf=1</td>
+      <td>1.384</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>Снег на задней половине (Y); снег γf=1</td>
+      <td>1.636</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>Снег на левой половине (X); снег γf=1</td>
+      <td>1.700</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>Снег на передней половине (Y); снег γf=1</td>
+      <td>1.509</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>Снег на правой половине (X); снег γf=1</td>
+      <td>1.444</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table><h2>3. Соответствие строительству</h2><p>Подтверждена только согласованность заданной геометрии и принятых гипотез. Жёсткая заделка оснований и абсолютно жёсткие сварные узлы приняты условно. Не заданы: подтверждённая сталь; состав/вес и несущая способность основания мембраны; размеры и прочность сварных узлов; расчётные длины и боковые закрепления; Жёсткие основания приняты по согласованной гипотезе, их прочность не входит в эту проверку металлокаркаса. Все одновременные реакции опор сохранены в reactions.csv для отдельного расчёта оснований.</p><table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Проверка</th>
+      <th>Статус</th>
+      <th>Пояснение</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Расчётная схема</td>
+      <td>ПРИНЯТА ГИПОТЕЗА</td>
+      <td>Пространственная рама: все стержни работают на изгиб и кручение; сварные узлы абсолютно жёсткие. Опоры только в основаниях. Жёсткость реальных узлов требует подтверждения.</td>
+    </tr>
+    <tr>
+      <td>Постоянная нагрузка кровли</td>
+      <td>УСЛОВНАЯ</td>
+      <td>Мембранная система с основанием: 0.15 кН/м². Основание и состав слоёв не выбраны; вес не подтверждён.</td>
+    </tr>
+    <tr>
+      <td>Материал</td>
+      <td>НЕ ПОДТВЕРЖДЁН</td>
+      <td>Марка стали неизвестна. Ry=245 МПа — условное допущение, а не установленная прочность поставленного металла.</td>
+    </tr>
+    <tr>
+      <td>Решение МКЭ</td>
+      <td>ВЫПОЛНЕНО</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>Упругие напряжения N + My + Mz</td>
+      <td>ЧАСТИЧНО</td>
+      <td>Максимум 0.328. Только нормальные напряжения в принятой модели; без среза, кручения и устойчивости.</td>
+    </tr>
+    <tr>
+      <td>Устойчивость элементов</td>
+      <td>НЕ ПОДТВЕРЖДЕНА</td>
+      <td>Эйлер — только индикатор, не проверка СП 16. Нужны расчётные длины, закрепления, кривые устойчивости, местная устойчивость и взаимодействие N–M.</td>
+    </tr>
+    <tr>
+      <td>Пространственные связи</td>
+      <td>НЕТ ДАННЫХ</td>
+      <td>Диагоналей между стойками и подкосов от стоек к фермам нет. B1 и B2 сходятся у K1-rear; это уже учтено геометрией. Отдельные диагональные связи в плоскости кровли не подтверждены. Дополнительная масса из прежней спецификации без жёсткости: 251.31 кг; её состав требует сверки. Работа кровли как диска не задана.</td>
+    </tr>
+    <tr>
+      <td>Снег</td>
+      <td>ЧАСТИЧНО</td>
+      <td>Сценарий: REAR_HALF. Дополнительные половинные загружения исследовательские; схемы СП 20, снеговые мешки и окружение требуют проверки.</td>
+    </tr>
+    <tr>
+      <td>Прогибы</td>
+      <td>НЕ ПОДТВЕРЖДЕНЫ</td>
+      <td>Нужны эксплуатационное сочетание, относительные прогибы пролётов и их предельные значения. Max Uz не является такой проверкой.</td>
+    </tr>
+    <tr>
+      <td>Соединения</td>
+      <td>НЕТ ДАННЫХ</td>
+      <td>Нужны швы/болты, опорные площадки, эксцентриситеты и местная прочность стенок труб.</td>
+    </tr>
+    <tr>
+      <td>Закрепление оснований</td>
+      <td>ПРИНЯТА ГИПОТЕЗА</td>
+      <td>Основания стоек: FIXED. По согласованию с заказчиком запрещены все три перемещения и три поворота.</td>
+    </tr>
+    <tr>
+      <td>Прочность свай, закладных и грунта</td>
+      <td>НЕ ПРОВЕРЕНО</td>
+      <td>Вынесена за рамки принятой гипотезы закрепления. Бетонные заливные сваи Ø250 мм, глубина 1700 мм. Стойки приварены к закладному швеллеру; к нему приварены 4 стержня Ø14 мм — со слов заказчика это всё армирование. Длина стержней 1500 мм; грунт — глина со слов заказчика. Бетон описан как «хорошей марки с щебнем», численный класс прочности не указан. Класс и расположение арматуры, защитный слой, швеллер, швы и расчётные характеристики грунта не уточнены. Жёсткая заделка расчётом не подтверждена.</td>
+    </tr>
+    <tr>
+      <td>Покрытие кровли</td>
+      <td>НЕ ПРОВЕРЕНО</td>
+      <td>Мембранная кровля; существующий уклон около 1,07° сохранён. Несущее основание, крепление, состав слоёв и водоотвод ещё не выбраны. В расчёте оставлена условная суммарная постоянная нагрузка 0,15 кН/м² — это не подтверждённый вес кровельной системы. Жёсткость мембраны и основания как диска не учитывается.</td>
+    </tr>
+    <tr>
+      <td>Сочетания и второй порядок</td>
+      <td>НЕ ПРОВЕРЕНО</td>
+      <td>Линейный расчёт; нужны расчётные сочетания, ветер, начальные несовершенства и эффекты второго порядка.</td>
+    </tr>
+  </tbody>
+</table><h2>Исходные параметры</h2><pre>{
+  &quot;preset_name&quot;: &quot;naves_one&quot;,
+  &quot;width&quot;: 12.0,
+  &quot;left_depth&quot;: 9.659,
+  &quot;right_depth&quot;: 7.03,
+  &quot;lower_count&quot;: 5,
+  &quot;lower_positions_x&quot;: null,
+  &quot;upper_count&quot;: 10,
+  &quot;lower_height_mm&quot;: 600,
+  &quot;upper_height_mm&quot;: 400,
+  &quot;upper_end_height_mm&quot;: 170,
+  &quot;upper_max_diagonal_mm&quot;: 800,
+  &quot;lower_chord_section&quot;: &quot;80x80x3&quot;,
+  &quot;lower_web_section&quot;: &quot;60x60x3&quot;,
+  &quot;upper_chord_section&quot;: &quot;60x60x3&quot;,
+  &quot;upper_web_section&quot;: &quot;40x40x3&quot;,
+  &quot;column_section&quot;: &quot;120x120x3&quot;,
+  &quot;column_height_mm&quot;: 2700,
+  &quot;support_mode&quot;: &quot;CUSTOM&quot;,
+  &quot;allow_interior_columns&quot;: false,
+  &quot;base_fixity&quot;: &quot;FIXED&quot;,
+  &quot;fixed_base_hypothesis_accepted&quot;: true,
+  &quot;column_joint&quot;: &quot;PINNED&quot;,
+  &quot;truss_joint_model&quot;: &quot;PINNED&quot;,
+  &quot;truss_type&quot;: &quot;RECTANGULAR&quot;,
+  &quot;web_type&quot;: &quot;WARREN&quot;,
+  &quot;lower_web_type&quot;: &quot;WARREN&quot;,
+  &quot;upper_web_type&quot;: &quot;WARREN&quot;,
+  &quot;panel_count&quot;: null,
+  &quot;lower_target_panel_length&quot;: 1.0,
+  &quot;target_panel_length&quot;: 1.0,
+  &quot;front_left_height&quot;: 3.801,
+  &quot;front_right_height&quot;: 3.6,
+  &quot;rear_left_height&quot;: 3.801,
+  &quot;roof_dead_load_kpa&quot;: 0.15,
+  &quot;snow_sg_kpa&quot;: 1.9,
+  &quot;snow_ce&quot;: 1.0,
+  &quot;snow_ct&quot;: 1.0,
+  &quot;snow_mu&quot;: null,
+  &quot;snow_gamma_f&quot;: 1.4,
+  &quot;project_notes&quot;: {
+    &quot;foundation_assumption&quot;: &quot;Для предварительного расчёта металлокаркаса заказчиком принята гипотеза жёсткой заделки оснований всех 12 стоек: три перемещения и три поворота запрещены. Несущая способность и реальная жёсткость свай, грунта и закладных в этой гипотезе не проверяются. Гипотеза не задаёт жёсткость надземных соединений.&quot;,
+    &quot;location&quot;: &quot;Калуга; отдельно стоящий навес.&quot;,
+    &quot;construction_status&quot;: &quot;Строительство ещё не началось, планируется в ближайшее время. Рабочее решение пространственной устойчивости и оснований не подтверждено.&quot;,
+    &quot;surroundings&quot;: &quot;Забор 2 м со стороны front; расстояние до забора не указано. Схода снега на кровлю, парапетов и снегозадержателей не будет.&quot;,
+    &quot;steel&quot;: &quot;Предположительно Ст3сп со слов заказчика; марка и прочность документально не подтверждены. Ry=245 МПа оставлено только как условное расчётное допущение.&quot;,
+    &quot;bracing&quot;: &quot;Диагоналей между стойками и подкосов от стоек к фермам нет. B1 и B2 сходятся у K1-rear; это уже учтено геометрией. Отдельные диагональные связи в плоскости кровли не подтверждены.&quot;,
+    &quot;joints&quot;: &quot;Нижние фермы непосредственно опираются на перекладины и приварены; верхние приварены к нижним; раскосы приварены прямо к поясам. Размеры швов неизвестны.&quot;,
+    &quot;roof&quot;: &quot;Мембранная кровля; существующий уклон около 1,07° сохранён. Несущее основание, крепление, состав слоёв и водоотвод ещё не выбраны. В расчёте оставлена условная суммарная постоянная нагрузка 0,15 кН/м² — это не подтверждённый вес кровельной системы. Жёсткость мембраны и основания как диска не учитывается.&quot;,
+    &quot;frame_assumption&quot;: &quot;Пространственная модель: основания FIXED, надземные сварные узлы идеализированы абсолютно жёсткими, в том числе соединения решётки с поясами. Искусственных опор над землёй нет. Прочность и реальная жёсткость швов не проверены.&quot;,
+    &quot;foundations&quot;: &quot;Бетонные заливные сваи Ø250 мм, глубина 1700 мм. Стойки приварены к закладному швеллеру; к нему приварены 4 стержня Ø14 мм — со слов заказчика это всё армирование. Длина стержней 1500 мм; грунт — глина со слов заказчика. Бетон описан как «хорошей марки с щебнем», численный класс прочности не указан. Класс и расположение арматуры, защитный слой, швеллер, швы и расчётные характеристики грунта не уточнены. Жёсткая заделка расчётом не подтверждена.&quot;,
+    &quot;drainage&quot;: &quot;Со слов заказчика: желоба с двух сторон; стороны, основание мембраны и детали водоотвода ещё не указаны.&quot;,
+    &quot;audit_scope&quot;: &quot;Проверка металлокаркаса при гипотезе жёстких оснований; прочность свай, закладных и грунта исключена из объёма, не считается подтверждённой.&quot;
+  },
+  &quot;steel_grade&quot;: &quot;UNKNOWN&quot;,
+  &quot;steel_resistance_mpa&quot;: 245.0,
+  &quot;steel_price_per_kg&quot;: 95.0,
+  &quot;fabrication_per_truss&quot;: 0.0,
+  &quot;column_cost&quot;: 0.0,
+  &quot;foundation_cost&quot;: 0.0,
+  &quot;connection_cost&quot;: 0.0,
+  &quot;structure_mode&quot;: &quot;TWO_LEVEL&quot;,
+  &quot;fem_subdivisions&quot;: 4,
+  &quot;spatial_diagnostic&quot;: false,
+  &quot;spatial_frame&quot;: true,
+  &quot;roof_system&quot;: &quot;MEMBRANE&quot;,
+  &quot;roof_load_confirmed&quot;: false,
+  &quot;snow_pattern&quot;: &quot;UNIFORM&quot;,
+  &quot;effective_lengths_m&quot;: {},
+  &quot;member_section_overrides&quot;: {}
+}</pre><p>Нормативные основания: <a href="https://internet-law.ru/documents/prod/pravila/0/sp_20.html">СП 20, раздел 15, приложение Д</a>; <a href="https://nav.tn.ru/cloud/iblock/9f7/9f78782393359c071745ad3c74d9179f/SP-16.13330.2017-Stalnye-konstruktsii.pdf">СП 16, разделы 7–9</a>.</p></html>

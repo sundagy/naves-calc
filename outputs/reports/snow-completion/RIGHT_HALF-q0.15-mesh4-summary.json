@@ -1,0 +1,48 @@
+{
+  "case": "RIGHT_HALF",
+  "roof_load": 0.15,
+  "mesh": 4,
+  "Uz_mm": -13.503588600710508,
+  "NM_max": 0.49734957882717906,
+  "worst": "B4 top chord",
+  "static_error_m": 1.6920303999058695e-09,
+  "modes": [
+    {
+      "mode": 1,
+      "factor": 28.189559175008494,
+      "residual": 1.8455832112326363e-07,
+      "peak_nodes": [
+        "F5 top chord / МКЭ 1",
+        "F5-roof-7.500",
+        "F5 top chord / МКЭ 2",
+        "F5 top chord / МКЭ 3",
+        "F5 top chord / МКЭ 3"
+      ]
+    },
+    {
+      "mode": 2,
+      "factor": 31.204913439266466,
+      "residual": 1.1510442215901258e-06,
+      "peak_nodes": [
+        "F6 top chord / МКЭ 1",
+        "F6-roof-7.500",
+        "F6 top chord / МКЭ 2",
+        "F6 top chord / МКЭ 3",
+        "F6 top chord / МКЭ 3"
+      ]
+    },
+    {
+      "mode": 3,
+      "factor": 32.15392012637366,
+      "residual": 3.0969738588377937e-07,
+      "peak_nodes": [
+        "F4 top chord / МКЭ 1",
+        "F4 top chord / МКЭ 2",
+        "F4-roof-7.500",
+        "F4 top chord / МКЭ 3",
+        "F4 top chord / МКЭ 3"
+      ]
+    }
+  ],
+  "limitations": "Elastic flexural initial-stress eigenproblem. All reference loads scale together. Not snow capacity; no SP16 acceptance, local wall buckling, yielding, imperfections, torsional initial-stress terms or weld flexibility. All members subdivided; selfweight lumping changes with mesh."
+}
