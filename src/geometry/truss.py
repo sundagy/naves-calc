@@ -37,14 +37,14 @@ class ElementRegistry:
     next_id: int = 1
     existing_pairs: set[tuple[int, int, str]] = field(default_factory=set)
 
-    def add(self, i: int, j: int, role: str, group: str, section: str, label: str) -> None:
+    def add(self, i: int, j: int, role: str, group: str, section: str, label: str, *, is_beam: bool = False) -> None:
         if i == j:
             return
         pair = (min(i, j), max(i, j), role)
         if pair in self.existing_pairs:
             return
         self.existing_pairs.add(pair)
-        self.elements.append(Element(self.next_id, i, j, role, group, section, label))
+        self.elements.append(Element(self.next_id, i, j, role, group, section, label, is_beam=is_beam))
         self.next_id += 1
 
 

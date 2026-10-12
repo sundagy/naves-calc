@@ -138,6 +138,7 @@ class Element:
     group: str
     section: str
     label: str
+    is_beam: bool = False
 
 
 @dataclass

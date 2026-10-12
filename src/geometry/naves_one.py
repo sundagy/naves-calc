@@ -6,7 +6,7 @@ Coordinates below are taken from sheets 2-5; all dimensions are metres.
 
 from __future__ import annotations
 
-from math import dist, isclose
+from math import ceil, dist, isclose
 
 from src.geometry.canopy import roof_plane_from_input
 from src.geometry.truss import ElementRegistry, NodeRegistry, add_web_pattern, validate_connectivity
@@ -150,23 +150,31 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
     for index, (front_x, end_y) in enumerate(zip(FRONT_XS, (LEFT_REAR_Y, *REAR_YS))):
         name = f"B{index + 1}"
         support_ys = [y for _, x, y in supports if (isclose(x, left_x(y), abs_tol=1e-7) if index == 0 else isclose(x, front_x, abs_tol=1e-7))]
-        # Keep the B1 panel geometry when removing K6 at this station.
-        if index == 0:
-            support_ys.append(2.659)
-        ys = _stations(0.0, end_y, [y for y in UPPER_YS if y <= end_y] + support_ys)
+        # Bearings split the chords only; neither columns nor F trusses alter the web.
+        plan_length = dist((front_x, 0.0), (left_x(end_y) if index == 0 else front_x, end_y))
+        panel_count = max(1, ceil(plan_length / max(data.lower_target_panel_length, 0.1)))
+        web_ys = [round(end_y * i / panel_count, 8) for i in range(panel_count + 1)]
+        top_ys = sorted(set(web_ys) | {round(y, 8) for y in UPPER_YS if y <= end_y})
+        bottom_ys = sorted(set(web_ys) | {round(y, 8) for y in support_ys})
         top_nodes: list[int] = []
         bottom_nodes: list[int] = []
-        for y in ys:
+        for y in top_ys:
             x = left_x(y) if index == 0 else front_x
             top_z = roof.z(x, y) - upper_height_at(data, x, y)
             top_nodes.append(nodes.get(x, y, top_z, f"{name}-top-{y:.3f}", "lower_top"))
-            bottom_nodes.append(nodes.get(x, y, top_z - lower_height, f"{name}-bottom-{y:.3f}", "lower_bottom"))
             lower_top_at[(index, y)] = top_nodes[-1]
+        for y in bottom_ys:
+            x = left_x(y) if index == 0 else front_x
+            top_z = roof.z(x, y) - upper_height_at(data, x, y)
+            bottom_nodes.append(nodes.get(x, y, top_z - lower_height, f"{name}-bottom-{y:.3f}", "lower_bottom"))
             lower_bottom_at[(index, y)] = bottom_nodes[-1]
         for row, label in ((top_nodes, "top"), (bottom_nodes, "bottom")):
             for a, b in zip(row, row[1:]):
-                elements.add(a, b, "lower_chord", name, data.lower_chord_section, f"{name} {label} chord")
-        add_web_pattern(elements, top_nodes, bottom_nodes, "lower_web", name, data.lower_web_section, WebType(data.lower_web_type))
+                elements.add(a, b, "lower_chord", name, data.lower_chord_section,
+                             f"{name} {label} chord", is_beam=True)
+        web_top_nodes = [lower_top_at[(index, y)] for y in web_ys]
+        web_bottom_nodes = [lower_bottom_at[(index, y)] for y in web_ys]
+        add_web_pattern(elements, web_top_nodes, web_bottom_nodes, "lower_web", name, data.lower_web_section, WebType(data.lower_web_type))
         lower_trusses[name] = top_nodes
 
     roof_node_ids: list[int] = []
@@ -186,7 +194,7 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
             if match is None:
                 bottom_nodes.append(nodes.get(x, y, top_z - upper_height_at(data, x, y), f"{name}-bottom-{x:.3f}", "upper_bottom"))
             else:
-                bottom_nodes.append(lower_top_at[(match, y)])
+                bottom_nodes.append(lower_top_at[(match, round(y, 8))])
         for row, label in ((top_nodes, "top"), (bottom_nodes, "bottom")):
             for a, b in zip(row, row[1:]):
                 elements.add(a, b, "upper_chord", name, data.upper_chord_section, f"{name} {label} chord")
@@ -254,6 +262,11 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
             "Стержневая идеализация по листам 2–5 PDF; узлы и закрепления требуют подтверждения инженером.",
             "Связи 40×20×1,5 учтены собственным весом 251,31 кг по спецификации, без их жёсткости.",
             "В текущем МКЭ горизонтальные перемещения всех узлов закреплены; результаты описывают только вертикальную идеализацию.",
+            "Решётка нижних ферм имеет равномерный шаг независимо от стоек и верхних ферм. "
+            "Узлы опирания добавлены только в пояса, без дополнительных стоек решётки. "
+            "Оба пояса учтены балочными элементами "
+            "с закреплёнными поворотами в узлах решётки; дополнительные узлы опирания "
+            "не закрепляют поворот пояса.",
             "Перекладины учтены балочными элементами с закреплёнными поворотами узлов; "
             "опирание передаёт вертикальные перемещения. Проверка изгиба и соединений не выполняется.",
         ],

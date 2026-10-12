@@ -184,6 +184,12 @@ def sidebar_inputs(presets: dict[str, dict], sections: list[str]) -> CanopyInput
 def naves_one_inputs(data: CanopyInput, sections: list[str]) -> CanopyInput:
     st.sidebar.caption("NavesOne: вариант по листам 2–5 «Навес 1809», 5 ферм В, 10 ферм Ф, 12 стоек — без K6.")
     st.sidebar.subheader("Высоты ферм")
+    data.lower_target_panel_length = st.sidebar.number_input(
+        "Шаг решётки нижних ферм, м", 0.1, 3.0, float(data.lower_target_panel_length), 0.1,
+        help="Панели делятся равномерно по длине каждой фермы. "
+             "Положение стоек и верхних ферм не меняет решётку; узлы опирания добавляются только в пояса.",
+        key="naves_lower_panel_length",
+    )
     data.lower_height_mm = st.sidebar.number_input(
         "Нижние фермы В, мм", 50.0, 1200.0, float(data.lower_height_mm), 10.0,
         key="naves_lower_height_mm",

@@ -100,9 +100,14 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
             ops.fix(node_id, 1, 1, 1, 0, 0, 0)
         else:
             ops.fix(node_id, 1, 1, 1, 1, 1, 1)
+    chord_nodes = {node_id for e in model.elements if e.is_beam for node_id in (e.i, e.j)}
+    web_nodes = {node_id for e in model.elements if e.role == "lower_web" for node_id in (e.i, e.j)}
+    chord_bearing_nodes = chord_nodes - web_nodes
     for node_id in model.nodes:
         if node_id not in model.support_node_ids:
-            ops.fix(node_id, 1, 1, 0, 1, 1, 1)
+            # Splitting a continuous chord at a bearing must not add a rotational clamp.
+            rotation_fixed = 0 if node_id in chord_bearing_nodes else 1
+            ops.fix(node_id, 1, 1, 0, rotation_fixed, rotation_fixed, rotation_fixed)
 
     ops.uniaxialMaterial("Elastic", 1, steel.E)
     ops.geomTransf("Linear", 1, 0.0, 1.0, 0.0)
@@ -110,7 +115,13 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
         ops.equalDOF(retained, constrained, 3)
     for element in model.elements:
         section = sections[element.section]
-        if element.role in ("column", "crossbeam"):
+        if element.role in ("column", "crossbeam") or element.is_beam:
+            transform = 1
+            if element.is_beam:
+                ni, nj = model.nodes[element.i], model.nodes[element.j]
+                # Local section depth is vertical in the truss plane, including B1.
+                transform = element.id + 1
+                ops.geomTransf("Linear", transform, -(nj.y - ni.y), nj.x - ni.x, 0.0)
             ops.element(
                 "elasticBeamColumn",
                 element.id,
@@ -122,7 +133,7 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
                 section.torsion_j,
                 section.iy,
                 section.ix,
-                1,
+                transform,
             )
         else:
             ops.element("truss", element.id, element.i, element.j, section.area, 1)
@@ -135,8 +146,9 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
     ops.constraints("Transformation" if model.bearing_links else "Plain")
     ops.numberer("RCM")
     ops.system("BandGeneral")
-    ops.test("NormDispIncr", 1e-8, 20)
-    ops.algorithm("Linear")
+    ops.test("NormDispIncr", 1e-12, 20)
+    # Correct the residual after the first solve for closely spaced bearing nodes.
+    ops.algorithm("Newton")
     ops.integrator("LoadControl", 1.0)
     ops.analysis("Static")
     code = ops.analyze(1)

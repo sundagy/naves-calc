@@ -29,7 +29,7 @@ def test_naves_one_drawing_geometry_and_load_path():
     assert restored.base_node in model.support_node_ids
     assert isclose(restored.x, 12.0) and isclose(restored.y, 4.829)
     assert not any(isclose(model.nodes[node_id].x, left_x(2.659)) and isclose(model.nodes[node_id].y, 2.659) for node_id in model.support_node_ids)
-    assert any(isclose(model.nodes[node_id].y, 2.659) for node_id in model.lower_trusses["B1"])
+    assert not any(isclose(model.nodes[node_id].y, 2.659) for node_id in model.lower_trusses["B1"])
     assert len(model.lower_trusses) == 5
     assert len(model.upper_trusses) == 10
     offset = 0.1 + section_database()[data.lower_chord_section].height / 2
@@ -46,6 +46,7 @@ def test_naves_one_drawing_geometry_and_load_path():
 
 def test_naves_one_trapezoids_and_shared_support_nodes():
     data = input_from_preset("naves_one")
+    data.lower_height_mm = 500
     model = generate_naves_one(data)
     lower_top_ids = {node_id for row in model.lower_trusses.values() for node_id in row}
     lower_bottoms = {
@@ -53,7 +54,10 @@ def test_naves_one_trapezoids_and_shared_support_nodes():
     }
     for node_id in lower_top_ids:
         top = model.nodes[node_id]
-        assert isclose(top.z - lower_bottoms[(top.x, top.y)].z, 0.5, abs_tol=1e-8)
+        # Upper-truss bearing nodes split only the top chord, not the web/bottom chord.
+        bottom = lower_bottoms.get((top.x, top.y))
+        if bottom is not None:
+            assert isclose(top.z - bottom.z, 0.5, abs_tol=1e-8)
 
     for name, top_ids in model.upper_trusses.items():
         tops = [model.nodes[node_id] for node_id in top_ids]
