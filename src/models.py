@@ -106,9 +106,14 @@ class CanopyInput:
     structure_mode: StructureMode = StructureMode.TWO_LEVEL
     fem_subdivisions: int = 1
     spatial_diagnostic: bool = False
+    spatial_frame: bool = False
+    roof_system: str = "PROFILED_SHEET"
+    roof_load_confirmed: bool = False
     snow_pattern: str = "UNIFORM"
     # Physical member labels survive FE subdivision. No mesh-length fallback.
     effective_lengths_m: dict[str, float] = field(default_factory=dict)
+    # Whole labelled members; same outside dimensions preserve bearing offsets.
+    member_section_overrides: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.support_mode = SupportMode(self.support_mode)

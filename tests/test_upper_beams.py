@@ -9,7 +9,7 @@ from src.geometry.naves_one import generate_naves_one
 
 
 def test_upper_chords_refine_but_webs_do_not_and_bearings_release_rotation():
-    data = input_from_preset("naves_one")
+    data = replace(input_from_preset("naves_one"), spatial_frame=False)
     coarse = generate_naves_one(data)
     fine = generate_naves_one(replace(data, fem_subdivisions=4))
     for role in ("upper_web", "lower_web"):
@@ -30,7 +30,7 @@ def test_upper_chords_refine_but_webs_do_not_and_bearings_release_rotation():
 def test_upper_chords_carry_bending_and_mesh_results_converge():
     import openseespy.opensees as ops
 
-    data = input_from_preset("naves_one")
+    data = replace(input_from_preset("naves_one"), spatial_frame=False)
     deflections = []
     for parts in (1, 2, 4, 8):
         model = generate_naves_one(replace(data, fem_subdivisions=parts))

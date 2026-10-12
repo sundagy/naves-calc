@@ -29,6 +29,7 @@ def html_report(data: CanopyInput, result: FEMResult) -> str:
 <h2>Надёжность не подтверждена</h2>
 <p>Решение МКЭ: {result.ok}. {escape(result.message)}</p>
 {result.checks.to_html(index=False)}
+<h2>Баланс сил и моментов</h2>{result.equilibrium.to_html(index=False)}
 <h2>Снеговые сценарии</h2>{result.scenarios.to_html(index=False)}
 <h2>Элементы: осевые силы, изгиб, индикатор Эйлера</h2>{result.elements.to_html(index=False)}
 <h2>Реакции оснований, включая моменты</h2>{result.reactions.to_html(index=False)}

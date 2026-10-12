@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import dist
+from math import dist, isfinite
 
 import pandas as pd
 
@@ -9,7 +9,7 @@ from src.checks.member import member_screening
 from src.checks.readiness import assessment
 from src.loads.scenarios import snow_pattern_loads
 from src.geometry.canopy import roof_plane_from_input
-from src.fem.assumptions import beam_width_axis, node_restraints
+from src.fem.assumptions import beam_width_axis, node_restraints, uses_beam, apply_bearing_constraints
 from src.loads.self_weight import G_ACCEL, mass_breakdown, self_weight_nodal_loads
 from src.loads.snow_sp20 import snow_design_pressure_kpa
 from src.loads.tributary import tributary_roof_loads
@@ -33,6 +33,7 @@ class FEMResult:
     artificial_reactions: pd.DataFrame = field(default_factory=pd.DataFrame)
     checks: pd.DataFrame = field(default_factory=pd.DataFrame)
     scenarios: pd.DataFrame = field(default_factory=pd.DataFrame)
+    equilibrium: pd.DataFrame = field(default_factory=pd.DataFrame)
     scenario: str = "UNIFORM"
     reliability_confirmed: bool = False
 
@@ -109,11 +110,10 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
         ops.fix(node_id, *fixed)
 
     ops.uniaxialMaterial("Elastic", 1, steel.E)
-    for retained, constrained in model.bearing_links:
-        ops.equalDOF(retained, constrained, 3)
+    apply_bearing_constraints(ops, data, model)
     for element in model.elements:
         section = sections[element.section]
-        if element.role in ("column", "crossbeam") or element.is_beam:
+        if uses_beam(data, element):
             transform = element.id
             ops.geomTransf("Linear", transform, *beam_width_axis(model, element))
             ops.element(
@@ -139,7 +139,7 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
 
     ops.constraints("Transformation" if model.bearing_links else "Plain")
     ops.numberer("RCM")
-    ops.system("UmfPack" if model.mesh_node_ids else "BandGeneral")
+    ops.system("UmfPack" if model.mesh_node_ids or data.spatial_frame else "BandGeneral")
     ops.test("NormDispIncr", 1e-12, 20)
     # Correct the residual after the first solve for closely spaced bearing nodes.
     ops.algorithm("Newton")
@@ -166,6 +166,8 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
     displacements: dict[int, tuple[float, float, float]] = {}
     for node in model.nodes.values():
         disp = ops.nodeDisp(node.id)
+        if not all(isfinite(v) for v in disp):
+            raise ValueError("Non-finite FEM displacements: result is invalid")
         ux, uy, uz = float(disp[0]), float(disp[1]), float(disp[2])
         displacements[node.id] = (ux, uy, uz)
         displacement_rows.append(
@@ -223,7 +225,7 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
         section = sections[element.section]
         axial_n = steel.E * section.area / length * axial_extension
         local_force = None
-        if element.is_beam or element.role in ("column", "crossbeam"):
+        if uses_beam(data, element):
             local_force = list(ops.eleResponse(element.id, "localForce"))
             if len(local_force) != 12:
                 raise RuntimeError("OpenSees did not return 12 local beam forces")
@@ -238,6 +240,7 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
                 "i": element.i,
                 "j": element.j,
                 "role": element.role,
+                "formulation": "beam" if uses_beam(data, element) else "truss",
                 "group": element.group,
                 "label": element.label,
                 "section": element.section,
@@ -266,8 +269,33 @@ def solve_model(data: CanopyInput, model: StructuralModel) -> FEMResult:
         artificial_reactions=pd.DataFrame(artificial_rows),
         scenario=data.snow_pattern,
     )
+    if data.spatial_frame:
+        result.equilibrium = spatial_equilibrium(model, result)
     result.checks = assessment(data, model, result)
     return result
+
+
+def spatial_equilibrium(model, result):
+    """Global force AND moment balance about origin, including base moments."""
+    import numpy as np
+    total = np.zeros(6)
+    magnitude = np.zeros(6)
+    for row in result.loads.itertuples():
+        f = np.array([0.0, 0.0, row.Fz_kN])
+        v = np.r_[f, np.cross(model.nodes[row.node].coords, f)]
+        total += v
+        magnitude += np.abs(v)
+    for row in result.reactions.itertuples():
+        f = np.array([row.Rx_kN, row.Ry_kN, row.Rz_kN])
+        moment = np.array([row.Mx_kNm, row.My_kNm, row.Mz_kNm])
+        v = np.r_[f, moment + np.cross(model.nodes[row.base_node].coords, f)]
+        total += v
+        magnitude += np.abs(v)
+    tolerance = 1e-6 + 1e-8 * magnitude
+    if not np.isfinite(total).all() or (np.abs(total) > tolerance).any():
+        raise ValueError(f"Spatial equilibrium failed: {total}")
+    return pd.DataFrame({"Компонента": ["Fx, кН", "Fy, кН", "Fz, кН", "Mx, кН·м", "My, кН·м", "Mz, кН·м"],
+                         "Невязка": total, "Допуск": tolerance})
 
 
 def _failed_result(

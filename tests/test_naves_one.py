@@ -15,6 +15,7 @@ from src.sections.database import section_database
 def test_naves_one_drawing_geometry_and_load_path():
     data = input_from_preset("naves_one")
     # Compare the original drawing dimensions, not the edited preset.
+    data.lower_web_section = "40x60x2"
     data.column_section = "100x100x3"
     data.column_height_mm = None
     data.lower_height_mm = 900

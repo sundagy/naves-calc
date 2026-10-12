@@ -1,0 +1,4 @@
+variant,label,section,y_start,y_end
+b3-top-4mm,B3 top chord,60x60x4,0.0,8.725
+b3-b4-top-4mm,B3 top chord,60x60x4,0.0,8.725
+b3-b4-top-4mm,B4 top chord,60x60x4,0.0,7.878

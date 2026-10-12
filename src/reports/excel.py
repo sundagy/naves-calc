@@ -15,6 +15,7 @@ def results_xlsx(result: FEMResult) -> bytes:
             [(name, value) for name, value in asdict(result.load_breakdown).items()],
             columns=["Показатель", "Значение"],
         ).to_excel(writer, sheet_name="Summary", index=False)
+        result.equilibrium.to_excel(writer, sheet_name="Spatial equilibrium", index=False)
         result.checks.to_excel(writer, sheet_name="Check coverage", index=False)
         result.scenarios.to_excel(writer, sheet_name="Snow scenarios", index=False)
         result.nodes.to_excel(writer, sheet_name="Nodes", index=False)

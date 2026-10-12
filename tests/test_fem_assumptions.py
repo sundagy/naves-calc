@@ -50,7 +50,7 @@ def test_rectangular_column_bends_about_correct_axis(direction):
 
 
 def test_artificial_restraints_are_reported_separately_from_bases():
-    data = replace(input_from_preset("naves_one"), fem_subdivisions=4)
+    data = replace(input_from_preset("naves_one"), fem_subdivisions=4, spatial_frame=False)
     model = generate_naves_one(data)
     fixed = node_restraints(data, model)
     assert model.mesh_node_ids.isdisjoint(fixed)

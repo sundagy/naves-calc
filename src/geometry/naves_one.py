@@ -283,7 +283,7 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
             "опирание передаёт вертикальные перемещения. Нормальные напряжения N–M проверяются; полная проверка прочности и соединений не выполняется.",
         ],
     )
-    if data.spatial_diagnostic:
+    if data.spatial_diagnostic or data.spatial_frame:
         from src.fem.assumptions import model_limitations
         model.warnings = model.warnings[:5] + [model_limitations(data)]
     if abs(sum(tributary_areas.values()) - model.loaded_roof_area) > 1e-7:
@@ -291,4 +291,22 @@ def generate_naves_one(data: CanopyInput) -> StructuralModel:
     validate_connectivity(model)
     from src.geometry.refinement import refine_beams
 
+    if data.member_section_overrides:
+        labels = {element.label for element in model.elements}
+        unknown = set(data.member_section_overrides) - labels
+        if unknown:
+            raise ValueError(f"Unknown member labels: {sorted(unknown)}")
+        for element in model.elements:
+            if element.label not in data.member_section_overrides:
+                continue
+            name = data.member_section_overrides[element.label]
+            if name not in sections:
+                raise ValueError(f"Unknown override section: {name}")
+            old, new = sections[element.section], sections[name]
+            if (old.height, old.width) != (new.height, new.width):
+                raise ValueError("Member overrides must preserve outside dimensions and bearing offsets")
+            element.section = name
+        model.warnings.append("Локальные замены целых стержней/поясов: " + "; ".join(
+            f"{label}: {section}" for label, section in data.member_section_overrides.items()
+        ) + ". Прочность узлов и устойчивость отдельно не подтверждены.")
     return refine_beams(model, data.fem_subdivisions)

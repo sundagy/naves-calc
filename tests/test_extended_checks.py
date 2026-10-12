@@ -56,7 +56,7 @@ def test_cantilever_bending_reactions_and_euler_length_independent_of_mesh(subdi
 
 
 def test_spatial_diagnostic_never_clamps_chords_or_horizontal_translations():
-    data = replace(input_from_preset("naves_one"), spatial_diagnostic=True)
+    data = replace(input_from_preset("naves_one"), spatial_diagnostic=True, spatial_frame=False)
     model = generate_naves_one(data)
     restraints = node_restraints(data, model)
     for node, flags in restraints.items():

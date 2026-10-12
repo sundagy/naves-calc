@@ -12,6 +12,17 @@ MODEL_LIMITATIONS = (
 
 
 def model_limitations(data):
+    if data.spatial_frame:
+        return (
+            "Пространственная линейная упругая рама. Стойки, перекладины, пояса и решётка "
+            "работают на растяжение/сжатие, изгиб и кручение. Сварные соединения приняты "
+            "абсолютно жёсткими; их фактическая жёсткость и прочность не подтверждены. "
+            "Жёсткие вставки учитывают существующие смещения осей у перекладин; "
+            "оси поясов в пересечениях ферм идеализированы совпадающими. "
+            "Закреплены только основания стоек. Мембрана и её основание не считаются диском жёсткости. "
+            "Решётка не дробится; собственный вес приложен к концам элементов. "
+            "Устойчивость, второй порядок, срез, кручение по прочности и соединения требуют отдельных проверок."
+        )
     if not data.spatial_diagnostic:
         return MODEL_LIMITATIONS
     return (
@@ -26,6 +37,9 @@ def model_limitations(data):
 def node_restraints(data: CanopyInput, model: StructuralModel) -> dict[int, tuple[int, ...]]:
     """Actual restraints of the current vertical idealization, not physical joint releases."""
     supports = set(model.support_node_ids)
+    if data.spatial_frame:
+        rotation = int(data.base_fixity != BaseFixity.PINNED)
+        return {n: (1, 1, 1, rotation, rotation, rotation) for n in supports}
     if data.spatial_diagnostic:
         # Remove all artificial translational supports and chord rotation clamps.
         # Only rotations with no beam stiffness at all are suppressed.
@@ -68,3 +82,24 @@ def beam_width_axis(model: StructuralModel, element: Element) -> tuple[float, fl
     if dx == 0 and dy == 0:
         return (1.0, 0.0, 0.0)
     return (-dy, dx, 0.0)
+
+
+def uses_beam(data: CanopyInput, element: Element) -> bool:
+    """Welded-frame hypothesis gives webs flexural and torsional stiffness too."""
+    return data.spatial_frame or element.is_beam or element.role in ("column", "crossbeam")
+
+
+def apply_bearing_constraints(ops, data: CanopyInput, model: StructuralModel):
+    """Never replace eccentric rigid joints with equal translations only."""
+    if data.spatial_frame:
+        retained = {a for a, _ in model.bearing_links}
+        constrained = [b for _, b in model.bearing_links]
+        if retained.intersection(constrained) or len(constrained) != len(set(constrained)):
+            raise ValueError("Rigid joints cannot have chained constraints or duplicate slave nodes")
+        if set(constrained).intersection(model.support_node_ids):
+            raise ValueError("A base support cannot also be a rigid-link slave")
+        for a, b in model.bearing_links:
+            ops.rigidLink("beam", a, b)
+    else:
+        for a, b in model.bearing_links:
+            ops.equalDOF(a, b, 3)

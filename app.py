@@ -52,8 +52,14 @@ def main() -> None:
     with st.sidebar.expander("Дополнительные проверки", expanded=True):
         data.snow_pattern = st.selectbox("Схема снега", list(PATTERNS), format_func=PATTERNS.get)
         st.caption("Половинные загружения — исследовательские сценарии, не полный набор схем СП 20.")
-        data.spatial_diagnostic = st.checkbox("Диагностика без искусственных закреплений")
-        if data.spatial_diagnostic:
+        modes = ["Пространственная рама: жёсткие сварные узлы", "Старая вертикальная идеализация", "Диагностика старой схемы без закреплений"]
+        selected_mode = st.selectbox("Расчётная схема", modes,
+                                     index=0 if data.spatial_frame else 2 if data.spatial_diagnostic else 1)
+        data.spatial_frame = selected_mode == modes[0]
+        data.spatial_diagnostic = selected_mode == modes[2]
+        if data.spatial_frame:
+            st.caption("Закреплены только основания. Жёсткость сварных узлов принята условно; мембрана и её основание не раскрепляют каркас в модели.")
+        elif data.spatial_diagnostic:
             st.warning("Существующие вертикальные связи опирания сохранены. Без реальных пространственных связей возможен механизм. Это диагностический режим.")
         run_suite = st.checkbox("Рассчитать все снеговые сценарии")
         st.caption("Расчётные длины для индикатора Эйлера задаются по метке физического элемента; длина КЭ не используется.")
@@ -233,7 +239,12 @@ def sidebar_inputs(presets: dict[str, dict], sections: list[str]) -> CanopyInput
         st.sidebar.warning("Высотные отметки кровли не заданы. Расчёт коэффициента формы снеговой нагрузки требует фактического уклона.")
 
     st.sidebar.subheader("Нагрузки")
-    data.roof_dead_load_kpa = st.sidebar.number_input("Постоянная нагрузка, кН/м²", 0.0, 5.0, data.roof_dead_load_kpa, 0.01)
+    data.roof_dead_load_kpa = st.sidebar.number_input("Полный вес кровли с основанием, кН/м²", 0.0, 5.0, data.roof_dead_load_kpa, 0.01)
+    if data.roof_system == "MEMBRANE":
+        st.sidebar.caption("Мембрана: малый уклон сохранён. В нагрузку должны входить мембрана, несущее основание, все слои и крепёж; металл каркаса учитывается отдельно.")
+        data.roof_load_confirmed = st.sidebar.checkbox("Вес всей кровельной системы подтверждён", value=data.roof_load_confirmed)
+        if not data.roof_load_confirmed:
+            st.sidebar.warning("Состав основания под мембрану не задан. Постоянная нагрузка условная; результаты требуют пересчёта после выбора кровельной системы.")
     data.snow_sg_kpa = st.sidebar.number_input("Sg снег на земле, кН/м²", 0.0, 10.0, data.snow_sg_kpa, 0.01)
     data.snow_ce = st.sidebar.number_input("ce", 0.0, 2.0, data.snow_ce, 0.05)
     data.snow_ct = st.sidebar.number_input("ct", 0.0, 2.0, data.snow_ct, 0.05)
@@ -305,7 +316,12 @@ def naves_one_inputs(data: CanopyInput, sections: list[str]) -> CanopyInput:
         current = getattr(data, attr)
         setattr(data, attr, st.sidebar.selectbox(label, sections, sections.index(current)))
     st.sidebar.subheader("Нагрузки")
-    data.roof_dead_load_kpa = st.sidebar.number_input("Постоянная нагрузка, кН/м²", 0.0, 5.0, data.roof_dead_load_kpa, 0.01)
+    data.roof_dead_load_kpa = st.sidebar.number_input("Полный вес кровли с основанием, кН/м²", 0.0, 5.0, data.roof_dead_load_kpa, 0.01)
+    if data.roof_system == "MEMBRANE":
+        st.sidebar.caption("Мембрана: малый уклон сохранён. В нагрузку должны входить мембрана, несущее основание, все слои и крепёж; металл каркаса учитывается отдельно.")
+        data.roof_load_confirmed = st.sidebar.checkbox("Вес всей кровельной системы подтверждён", value=data.roof_load_confirmed)
+        if not data.roof_load_confirmed:
+            st.sidebar.warning("Состав основания под мембрану не задан. Постоянная нагрузка условная; результаты требуют пересчёта после выбора кровельной системы.")
     data.snow_sg_kpa = st.sidebar.number_input("Sg снег на земле, кН/м²", 0.0, 10.0, data.snow_sg_kpa, 0.01)
     data.snow_ce = st.sidebar.number_input("ce", 0.0, 2.0, data.snow_ce, 0.05)
     data.snow_ct = st.sidebar.number_input("ct", 0.0, 2.0, data.snow_ct, 0.05)
@@ -369,11 +385,23 @@ def show_results(data: CanopyInput, model, result) -> None:
     st.caption(
         "Max util = max |N|/(A·Ry), Ry = "
         f"{data.steel_resistance_mpa:g} МПа. Это не полная проверка несущей способности. "
-        + ("В вертикальной идеализации искусственные закрепления меняют работу ферм. " if not data.spatial_diagnostic else "Диагностика не заменяет восстановление реальных пространственных связей. ")
+        + ("Пространственная модель без искусственных опор над землёй; жёсткость сварных узлов принята условно. " if data.spatial_frame else "Расчётная схема содержит допущения, указанные ниже. ")
         + "Баланс вертикальных нагрузок не подтверждает корректность этой расчётной схемы."
     )
     st.metric("Макс. упругие напряжения N–M / Ry", f"{result.elements.elastic_NM_util.max():.2f}")
+    if result.elements.elastic_NM_util.max() > 1:
+        worst = result.elements.loc[result.elements.elastic_NM_util.idxmax()]
+        st.error(
+            f"Превышение по нормальным напряжениям: {worst['label']}, "
+            f"N–M / Ry = {worst.elastic_NM_util:.2f} > 1. "
+            "Текущий вариант требует изменения и повторной проверки."
+        )
     st.caption("Учитываются осевая сила и изгиб по двум осям. Это проверка нормальных напряжений в текущей модели, без устойчивости, среза и кручения. Эйлер < 1 также не означает прохождение СП 16.")
+    if not result.equilibrium.empty:
+        st.metric("Макс. горизонтальное перемещение узла",
+                  f"{((result.nodes.Ux_mm**2 + result.nodes.Uy_mm**2)**0.5).max():.2f} мм")
+        with st.expander("Баланс сил и моментов пространственной модели"):
+            st.dataframe(result.equilibrium, hide_index=True)
     with st.expander("Проверка расчётной схемы и искусственных закреплений"):
         st.write(model_limitations(data))
         if not result.artificial_reactions.empty:
@@ -404,7 +432,7 @@ def show_results(data: CanopyInput, model, result) -> None:
 
     tab_names = ["Элементы", "Узлы", "Реакции", "Нагрузки", "Top utilization", "Экспорт"]
     tabs = st.tabs(tab_names)
-    tabs[0].dataframe(result.elements.sort_values("utilization", ascending=False), use_container_width=True)
+    tabs[0].dataframe(result.elements.sort_values("elastic_NM_util", ascending=False), use_container_width=True)
     tabs[1].dataframe(result.nodes, use_container_width=True)
     tabs[2].dataframe(result.reactions.sort_values("Rz_kN", ascending=False), use_container_width=True)
     tabs[3].dataframe(result.loads, use_container_width=True)
